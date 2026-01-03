@@ -40,7 +40,7 @@ Future<void> _handleLogin() async {
     final auth = FirebaseAuth.instance;
     final firestore = FirebaseFirestore.instance;
 
-    // --- PHASE 1 & 2: EMAIL & PASSWORD ---
+
     UserCredential credential;
     try {
       credential = await auth.signInWithEmailAndPassword(
@@ -58,7 +58,7 @@ Future<void> _handleLogin() async {
     User? user = credential.user;
     if (user == null) throw 'Authentication failed.';
 
-    // --- CHECK EMAIL VERIFICATION ---
+
     await user.reload();
     user = auth.currentUser;
     if (!user!.emailVerified) {
@@ -66,14 +66,12 @@ Future<void> _handleLogin() async {
       throw 'Please verify your email address before logging in.';
     }
 
-    // Fetch User Profile
     DocumentSnapshot userDoc = await firestore.collection('users').doc(user.uid).get();
     if (!userDoc.exists) {
       await auth.signOut();
       throw 'User profile not found in database.';
     }
 
-    // Sync Firestore isVerified attribute
     if (userDoc['isVerified'] == false) {
       await firestore.collection('users').doc(user.uid).update({'isVerified': true});
     }
@@ -81,8 +79,6 @@ Future<void> _handleLogin() async {
     String role = userDoc['role'];
     String userGymId = userDoc['gymId'];
 
-    // --- PHASE 3: GYM CODE VALIDATION ---
-    // Fetch the specific gym registration code from the database
     DocumentSnapshot gymDoc = await firestore.collection('gyms').doc(userGymId).get();
     
     if (!gymDoc.exists) {
@@ -93,13 +89,12 @@ Future<void> _handleLogin() async {
     String actualGymCode = gymDoc['registrationCode'] ?? "";
     String enteredCode = _codeController.text.trim();
 
-    // STRICT CHECK: If code doesn't match, STOP HERE.
     if (enteredCode != actualGymCode) {
-      await auth.signOut(); // Kick them out of Firebase session
+      await auth.signOut(); 
       throw 'INVALID GYM CODE: You do not have access to this facility.';
     }
 
-    // --- FINAL CLEARANCE: ROUTE BASED ON ROLE ---
+    
     if (role == 'member') {
       Navigator.pushAndRemoveUntil(
         context,
@@ -115,7 +110,7 @@ Future<void> _handleLogin() async {
     }
 
   } catch (e) {
-    // Show user-friendly error message
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(e.toString()),
