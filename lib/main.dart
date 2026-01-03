@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'register.dart';
-
+import 'gym_owner.dart';
 import 'login.dart';
 
 void main() async {
