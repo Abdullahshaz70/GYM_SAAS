@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:saas/qr_scan.dart';
 import 'register.dart';
-// Import your dashboard files here
+
 import 'gym_owner.dart';
 import 'gym_user.dart';
 
@@ -112,6 +112,9 @@ Future<void> _handleLogin() async {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -128,7 +131,9 @@ Future<void> _handleLogin() async {
           child: AutofillGroup(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: [               
+
+
                 const Text(
                   "WELCOME BACK",
                   style: TextStyle(
@@ -143,10 +148,15 @@ Future<void> _handleLogin() async {
                   style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
                 const SizedBox(height: 50),
+                
+                
                 Form(
                   key: _key,
                   child: Column(
                     children: [
+                      
+                      
+                      
                       TextFormField(
                         controller: _mailController,
                         keyboardType: TextInputType.emailAddress,
@@ -160,6 +170,9 @@ Future<void> _handleLogin() async {
                         validator: (v) => !v!.contains("@") ? "Enter a valid email" : null,
                       ),
                       const SizedBox(height: 20),
+                    
+                    
+                    
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _isPasswordObscured,
@@ -180,6 +193,9 @@ Future<void> _handleLogin() async {
                         validator: (v) => v!.isEmpty ? "Enter your password" : null,
                       ),
                       const SizedBox(height: 20),
+                    
+                    
+                    
                       TextFormField(
                         controller: _codeController,
                         style: const TextStyle(color: Colors.white),
@@ -202,6 +218,9 @@ Future<void> _handleLogin() async {
                         ),
                       ),
                       const SizedBox(height: 30),
+                    
+                    
+                    
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -218,6 +237,9 @@ Future<void> _handleLogin() async {
                         ),
                       ),
                       const SizedBox(height: 25),
+                    
+                    
+                    
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -228,6 +250,9 @@ Future<void> _handleLogin() async {
                           )
                         ],
                       ),
+                    
+                    
+                    
                     ],
                   ),
                 )
