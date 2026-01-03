@@ -32,88 +32,101 @@ class _LoginState extends State<Login> {
   }
 
 Future<void> _handleLogin() async {
-    if (!_key.currentState!.validate()) return;
+  if (!_key.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
+  try {
+    final auth = FirebaseAuth.instance;
+    final firestore = FirebaseFirestore.instance;
+
+    // --- PHASE 1 & 2: EMAIL & PASSWORD ---
+    UserCredential credential;
     try {
-      final auth = FirebaseAuth.instance;
-      final firestore = FirebaseFirestore.instance;
-
-      UserCredential credential = await auth.signInWithEmailAndPassword(
+      credential = await auth.signInWithEmailAndPassword(
         email: _mailController.text.trim(),
         password: _passwordController.text,
       );
-
-      User? user = credential.user;
-      if (user == null) throw 'User not found.';
-
-      // 1. Force reload Firebase Auth state
-      await user.reload();
-      user = auth.currentUser; 
-
-      // 2. Fetch the User Document from Firestore
-      DocumentSnapshot userDoc = await firestore.collection('users').doc(user!.uid).get();
-
-      if (!userDoc.exists) {
-        await auth.signOut();
-        throw 'User record not found.';
-      }
-
-      // 3. Logic for your 'isVerified' attribute
-      bool firestoreVerified = userDoc['isVerified'] ?? false;
-
-      if (!firestoreVerified) {
-        // Check if they actually verified their email just now
-        if (user.emailVerified) {
-          // Sync Firestore attribute if Auth is now true
-          await firestore.collection('users').doc(user.uid).update({'isVerified': true});
-          firestoreVerified = true; 
-        } else {
-          await auth.signOut();
-          throw 'Your account is not verified yet. Please check your email.';
-        }
-      }
-
-      String role = userDoc['role'];
-      String userGymId = userDoc['gymId'];
-
-      if (role == 'member') {
-        DocumentSnapshot gymDoc = await firestore.collection('gyms').doc(userGymId).get();
-        if (!gymDoc.exists) throw 'Associated gym not found.';
-        
-        String correctGymCode = gymDoc['registrationCode'];
-        if (_codeController.text.trim() != correctGymCode) {
-          await auth.signOut();
-          throw 'Invalid Gym Code for this account.';
-        }
-        
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const GymUser()),
-          (route) => false,
-        );
-      } else if (role == 'owner') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const GymOwner()),
-          (route) => false,
-        );
-      }
-
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    } on FirebaseAuthException catch (e) {
+      String msg = "Login failed";
+      if (e.code == 'user-not-found') msg = "No account found with this email.";
+      if (e.code == 'wrong-password') msg = "Incorrect password.";
+      if (e.code == 'invalid-email') msg = "The email address is badly formatted.";
+      throw msg;
     }
+
+    User? user = credential.user;
+    if (user == null) throw 'Authentication failed.';
+
+    // --- CHECK EMAIL VERIFICATION ---
+    await user.reload();
+    user = auth.currentUser;
+    if (!user!.emailVerified) {
+      await auth.signOut();
+      throw 'Please verify your email address before logging in.';
+    }
+
+    // Fetch User Profile
+    DocumentSnapshot userDoc = await firestore.collection('users').doc(user.uid).get();
+    if (!userDoc.exists) {
+      await auth.signOut();
+      throw 'User profile not found in database.';
+    }
+
+    // Sync Firestore isVerified attribute
+    if (userDoc['isVerified'] == false) {
+      await firestore.collection('users').doc(user.uid).update({'isVerified': true});
+    }
+
+    String role = userDoc['role'];
+    String userGymId = userDoc['gymId'];
+
+    // --- PHASE 3: GYM CODE VALIDATION ---
+    // Fetch the specific gym registration code from the database
+    DocumentSnapshot gymDoc = await firestore.collection('gyms').doc(userGymId).get();
+    
+    if (!gymDoc.exists) {
+      await auth.signOut();
+      throw 'Your assigned gym was not found.';
+    }
+
+    String actualGymCode = gymDoc['registrationCode'] ?? "";
+    String enteredCode = _codeController.text.trim();
+
+    // STRICT CHECK: If code doesn't match, STOP HERE.
+    if (enteredCode != actualGymCode) {
+      await auth.signOut(); // Kick them out of Firebase session
+      throw 'INVALID GYM CODE: You do not have access to this facility.';
+    }
+
+    // --- FINAL CLEARANCE: ROUTE BASED ON ROLE ---
+    if (role == 'member') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const GymUser()),
+        (route) => false,
+      );
+    } else if (role == 'owner') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const GymOwner()),
+        (route) => false,
+      );
+    }
+
+  } catch (e) {
+    // Show user-friendly error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString()),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
-
-
+}
 
   @override
   Widget build(BuildContext context) {
