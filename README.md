@@ -30,58 +30,65 @@ samples, guidance on mobile development, and a full API reference.
 
 
 
-gyms (collection)
- └── {gymId} (document)
-     ├── gymName: String
-     ├── ownerUid: String
-     ├── isSaaSActive: Boolean
-     ├── registrationCode: String
-     ├── location: String
-     ├── createdAt: Timestamp
-     ├── plan: String
-     └── status: String
 
-gyms/{gymId}/members (subcollection)
- └── {uid} (document)
-     ├── status: String
-     ├── membershipPlan: String
-     ├── validUntil: Timestamp | null
-     ├── lastPaymentDate: Timestamp | null
-     ├── totalFeesPaid: Number
-     └── createdAt: Timestamp
-     |__ uid :String
+gyms/{gymId}
+- gymName: String
+- ownerUid: String
+- location: String
+- defaultFee: Number
+- registrationCode: String
+- plan: String              // free | basic | pro
+- status: String            // active | suspended | blocked
+- isSaaSActive: Boolean
+- createdAt: Timestamp
 
-gyms/{gymId}/attendance (subcollection)
- └── {date} (document)
-     └── logs (subcollection)
-         └── {uid} (document)
-             ├── checkInTime: Timestamp
-             └── paymentStatusAtCheckIn: String
 
-gyms/{gymId}/payments (subcollection)
- └── {paymentId} (document)
-     ├── memberId: String
-     ├── amount: Number
-     ├── method: String
-     ├── verified: Boolean
-     └── timestamp: Timestamp
 
-users (collection)
- └── {uid} (document)
-     ├── name: String
-     ├── email: String
-     ├── role: String
-     ├── gymId: String
-     ├── isVerified: Boolean
-     ├── status: String
-     └── createdAt: Timestamp
-     |__ contactNumber: String
+gyms/{gymId}/payments/{paymentId}
+- memberId: String
+- amount: Number
+- method: String
+- verified: Boolean
+- timestamp: Timestamp
+
+
+
+users/{uid}
+- name: String
+- email: String
+- role: String              // superAdmin | owner | member
+- gymId: String | null
+- isVerified: Boolean
+- status: String            // active | pending | blocked
+- createdAt: Timestamp
+- contactNumber: String
 
 
 
 
+gyms/{gymId}/attendance/{attendanceId}
+- memberId: String
+- date: String              // "2026-01-04" (YYYY-MM-DD)
 
 
+
+
+member(sub collection)
+
+- uid: String                 // same as documentId (users/{uid})
+- name: String
+- contactNumber: String
+
+- status: String              // active | inactive | blocked
+- joinedAt: Timestamp
+
+- currentFee: Number          // editable (default from gym OR custom)
+
+- feeStatus: String           // paid | unpaid | overdue
+- validUntil: Timestamp | null
+
+- createdBy: String           // ownerUid
+- createdAt: Timestamp
 
 
 

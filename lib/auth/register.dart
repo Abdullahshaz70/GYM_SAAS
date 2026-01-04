@@ -58,9 +58,9 @@ class _RegisterState extends State<Register> {
     }
 
     final gymData = gymQuery.docs.first.data();
-    final bool isSaasActive = gymData['isSaasActive'] ?? false;
+    final bool isSaaSActive = gymData['isSaaSActive'] ?? false;
 
-    if (!isSaasActive) {
+    if (!isSaaSActive) {
       throw 'This gym is currently not accepting new digital registrations.';
     }
 
