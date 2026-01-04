@@ -169,4 +169,5 @@ class MemberDetailScreen extends StatelessWidget {
       ],
     );
   }
+  
 }
