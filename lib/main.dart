@@ -8,6 +8,8 @@ import 'register.dart';
 import 'gym_owner.dart';
 import 'login.dart';
 
+import 'auth_wrapper.dart';
+
 void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +43,7 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const Login(),
+      home: const AuthWrapper(),
     );
   }
 }
