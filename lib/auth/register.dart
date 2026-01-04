@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login.dart';
-import 'qr_scan.dart';
+import '../qr_scan.dart';
 
 class Register extends StatefulWidget {
   const Register({super.key});

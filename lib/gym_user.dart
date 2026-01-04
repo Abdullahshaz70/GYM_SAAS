@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login.dart';
+import 'auth/login.dart';
 
 class GymUser extends StatefulWidget {
   const GymUser({super.key});
