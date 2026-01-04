@@ -105,6 +105,7 @@ Future<void> fetchMembers() async {
 
     members.add({
       'id': uid.substring(0, 6).toUpperCase(),
+      'uid': uid,
       'name': userDoc.exists ? userDoc['name'] ?? 'Unknown' : 'Unknown',
       'status': data['status'] ?? 'Pending',
       'membershipPlan': data['membershipPlan'],
@@ -315,18 +316,15 @@ Widget build(BuildContext context) {
             ),
           )
         : ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredMembers.length,
-            itemBuilder: (context, index) {
-              final member = filteredMembers[index];
-              return _buildMemberTile(
-                name: member['name'],
-                status: member['status'],
-                id: member['id'],
-              );
-            },
-          ),
+  shrinkWrap: true,
+  physics: const NeverScrollableScrollPhysics(),
+  itemCount: filteredMembers.length,
+  itemBuilder: (context, index) {
+    final member = filteredMembers[index];
+    return _buildMemberTile(member: member);
+  },
+),
+
             
           
           
@@ -358,19 +356,20 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _buildMemberTile({required String name, required String status, required String id}) {
-    return GestureDetector(
+Widget _buildMemberTile({required Map<String, dynamic> member}) {
+  return GestureDetector(
     onTap: () {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => MemberDetailScreen(
-            member: {'name': name, 'status': status, 'id': id},
+          builder: (_) => MemberDetailScreen(
+            uid: member['uid'],  
+            gymId: gymId!,
           ),
         ),
       );
     },
-    child:Container(
+    child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -384,14 +383,14 @@ Widget build(BuildContext context) {
             children: [
               CircleAvatar(
                 backgroundColor: Colors.yellowAccent,
-                child: Text(name[0], style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: Text(member['name'][0], style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 15),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text("ID: $id", style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                  Text(member['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text("ID: ${member['id']}", style: const TextStyle(color: Colors.white38, fontSize: 12)),
                 ],
               ),
             ],
@@ -399,13 +398,13 @@ Widget build(BuildContext context) {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: status == "Paid" ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+              color: member['status'] == "Paid" ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              status,
+              member['status'],
               style: TextStyle(
-                color: status == "Paid" ? Colors.greenAccent : Colors.orangeAccent,
+                color: member['status'] == "Paid" ? Colors.greenAccent : Colors.orangeAccent,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
@@ -413,9 +412,9 @@ Widget build(BuildContext context) {
           ),
         ],
       ),
-    )
-    );
-  }
+    ),
+  );
+}
 
 
 }

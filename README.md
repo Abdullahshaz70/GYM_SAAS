@@ -49,6 +49,7 @@ gyms/{gymId}/members (subcollection)
      ├── lastPaymentDate: Timestamp | null
      ├── totalFeesPaid: Number
      └── createdAt: Timestamp
+     |__ uid :String
 
 gyms/{gymId}/attendance (subcollection)
  └── {date} (document)
@@ -74,6 +75,7 @@ users (collection)
      ├── isVerified: Boolean
      ├── status: String
      └── createdAt: Timestamp
+     |__ contactNumber: String
 
 
 

@@ -42,6 +42,7 @@ class _RegisterState extends State<Register> {
     required String email,
     required String password,
     required String gymCode,
+    required String contactNumber,
   }) async {
     final auth = FirebaseAuth.instance;
     final firestore = FirebaseFirestore.instance;
@@ -86,6 +87,7 @@ class _RegisterState extends State<Register> {
     batch.set(firestore.collection('users').doc(uid), {
       'name': name,
       'email': email,
+      'contactNumber': contactNumber,
       'role': 'member',
       'gymId': gymId,
       'isVerified': false,
@@ -98,6 +100,7 @@ class _RegisterState extends State<Register> {
       'validUntil': null,
       'lastPaymentDate': null,
       'totalFeesPaid': 0,
+      'uid': uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
@@ -342,6 +345,7 @@ class _RegisterState extends State<Register> {
                                   email: _mailController.text.trim(),
                                   password: _passwordController.text,
                                   gymCode: _qrController.text.trim(),
+                                  contactNumber: _contactController.text.trim(),
                                 );
                                 setState(() => _isLoading = false);
                                 _showSuccessDialog();
