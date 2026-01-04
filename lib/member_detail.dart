@@ -498,7 +498,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
             const SizedBox(height: 40),
 
-            // --- DETAILS SECTION ---
             _sectionHeader("MEMBER DETAILS"),
             const SizedBox(height: 5),
             _infoTile(

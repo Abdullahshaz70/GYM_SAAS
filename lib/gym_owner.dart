@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter/services.dart';
+
+
 import 'login.dart';
 import 'member_detail.dart';
+
 
 class GymOwner extends StatefulWidget {
   const GymOwner({super.key});
@@ -27,6 +33,7 @@ class _GymOwnerState extends State<GymOwner> {
   bool loadingStats = true;
 
   String? name;
+  String? gymCode;
 
   List<Map<String, dynamic>> allMembers = [];
   List<Map<String, dynamic>> filteredMembers = [];
@@ -35,6 +42,7 @@ class _GymOwnerState extends State<GymOwner> {
 
 
   Future<void> fetchGymStats() async {
+
   final uid = FirebaseAuth.instance.currentUser!.uid;
   final firestore = FirebaseFirestore.instance;
 
@@ -74,6 +82,7 @@ class _GymOwnerState extends State<GymOwner> {
     totalRevenue = revenue;
     loadingStats = false;
     name = gymQuery.docs.first['gymName'] ?? 'Owner';
+    gymCode = gymQuery.docs.first['registrationCode'] ?? '';
   });
 
   await fetchMembers();
@@ -171,6 +180,7 @@ void initState() {
 
 
 
+
   @override
 @override
 Widget build(BuildContext context) {
@@ -188,23 +198,31 @@ Widget build(BuildContext context) {
 
   return Scaffold(
     backgroundColor: Colors.black,
+    
+    
     appBar: AppBar(
-      backgroundColor: Colors.black,
-      title: Text(
-        "Welcome,\n$name",
-        style: const TextStyle(
-          color: Colors.yellowAccent,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
-      ),
-      actions: [
-        IconButton(
-          onPressed: _logout,
-          icon: const Icon(Icons.logout, color: Colors.redAccent),
-        )
-      ],
+  backgroundColor: Colors.black,
+  title: Text(
+    "Welcome,\n$name",
+    style: const TextStyle(
+      color: Colors.yellowAccent,
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1.2,
     ),
+  ),
+  actions: [
+    // --- NEW QR CODE BUTTON ---
+    IconButton(
+      onPressed: () => _showRegistrationQR(context),
+      icon: const Icon(Icons.qr_code_2, color: Colors.yellowAccent, size: 28),
+    ),
+    IconButton(
+      onPressed: _logout,
+      icon: const Icon(Icons.logout, color: Colors.redAccent),
+    )
+  ],
+),
+    
     body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -417,7 +435,245 @@ Widget _buildMemberTile({required Map<String, dynamic> member}) {
 }
 
 
+void _showRegistrationQR(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF121212),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          border: Border.all(color: Colors.white10, width: 1),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 30),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.yellowAccent.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.qr_code_scanner, color: Colors.yellowAccent, size: 30),
+            ),
+            const SizedBox(height: 15),
+            const Text(
+              "GYM ACCESS CODE",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Let the member scan this to join your gym",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+            ),
+            const SizedBox(height: 35),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.yellowAccent.withOpacity(0.15),
+                    blurRadius: 30,
+                    spreadRadius: 5,
+                  )
+                ],
+              ),
+              child: QrImageView(
+                data: gymCode ?? "NO-CODE",
+                version: QrVersions.auto,
+                size: 180.0,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: Colors.black,
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+            const SizedBox(height: 30),
+            GestureDetector(
+              onTap: () {
+                _showCustomToast(context, "Code Copied");
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      gymCode ?? "---",
+                      style: const TextStyle(
+                        color: Colors.yellowAccent,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 5,
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    const Icon(Icons.copy_rounded, color: Colors.white38, size: 18),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.yellowAccent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 0,
+                ),
+                child: const Text("DONE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      );
+    },
+  );
 }
+
+void _showCustomToast(BuildContext context, String message) {
+  OverlayEntry? overlayEntry;
+
+  overlayEntry = OverlayEntry(
+    builder: (context) => _ToastWidget(
+      message: message,
+      onDismissed: () {
+        overlayEntry?.remove();
+      },
+    ),
+  );
+
+  Overlay.of(context).insert(overlayEntry);
+}
+
+
+
+}
+
+
+
+class _ToastWidget extends StatefulWidget {
+  final String message;
+  final VoidCallback onDismissed;
+
+  const _ToastWidget({required this.message, required this.onDismissed});
+
+  @override
+  State<_ToastWidget> createState() => _ToastWidgetState();
+}
+
+class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+    _controller.forward();
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        _controller.reverse().then((value) => widget.onDismissed());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: MediaQuery.of(context).size.height * 0.12,
+      left: 0,
+      right: 0,
+      child: Material(
+        color: Colors.transparent,
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
+                ),
+                child: Text(
+                  widget.message,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 
 
