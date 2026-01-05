@@ -41,7 +41,9 @@ gyms/{gymId}
 - status: String            // active | suspended | blocked
 - isSaaSActive: Boolean
 - createdAt: Timestamp
-
+- attendanceQrExpiresAt: TimeStamp
+- attendanceQrLastGeneratedAt: TimeStamp
+- currentAttendanceQrToken: String
 
 
 gyms/{gymId}/payments/{paymentId}

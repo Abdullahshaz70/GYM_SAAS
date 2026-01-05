@@ -39,9 +39,11 @@ class _GymOwnerState extends State<GymOwner> {
   List<Map<String, dynamic>> filteredMembers = [];
   bool loadingMembers = true;
 
+  int todayAttendanceCount = 0;
 
 
-  Future<void> fetchGymStats() async {
+
+Future<void> fetchGymStats() async {
 
   final uid = FirebaseAuth.instance.currentUser!.uid;
   final firestore = FirebaseFirestore.instance;
@@ -65,6 +67,23 @@ class _GymOwnerState extends State<GymOwner> {
       .doc(gymId)
       .collection('members')
       .get();
+
+  
+  final today = DateTime.now();
+final todayKey =
+    "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+final attendanceSnapshot = await firestore
+    .collection('gyms')
+    .doc(gymId)
+    .collection('attendance')
+    .where('date', isEqualTo: todayKey)
+    .get();
+
+todayAttendanceCount = attendanceSnapshot.size;
+
+
+
 
   final paymentsSnapshot = await firestore
       .collection('gyms')
@@ -143,7 +162,58 @@ void _onSearchChanged(String query) {
 }
 
 
+void _showAttendanceQR() {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('gyms')
+            .doc(gymId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final token = data['currentAttendanceQrToken'];
+
+          return Container(
+            padding: const EdgeInsets.all(30),
+            decoration: const BoxDecoration(
+              color: Color(0xFF121212),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "SCAN TO MARK ATTENDANCE",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(15),
+                  child: QrImageView(
+                    data: "$gymId|$token",
+                    size: 220,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+
 @override
+
 void initState() {
   super.initState();
   fetchGymStats();
@@ -182,173 +252,186 @@ void initState() {
 
 
   @override
+
+
+
 @override
-Widget build(BuildContext context) {
-  if (loadingStats) {
-    return const Scaffold(
+  Widget build(BuildContext context) {
+    if (loadingStats) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Colors.yellowAccent,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: CircularProgressIndicator(
-          color: Colors.yellowAccent,
-          strokeWidth: 2,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        title: Text(
+          "Welcome,\n$name".toUpperCase(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+          ),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () => _showRegistrationQR(context),
+            icon: const Icon(Icons.qr_code_2, color: Colors.yellowAccent, size: 28),
+          ),
+          IconButton(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
+          )
+        ],
+      ),
+      
+      
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAttendanceQR,
+        backgroundColor: Colors.yellowAccent,
+        icon: const Icon(Icons.qr_code, color: Colors.black),
+        label: const Text(
+          "SHOW ATTENDANCE QR",
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
         ),
       ),
-    );
-  }
 
-  return Scaffold(
-    backgroundColor: Colors.black,
-    
-    
-    appBar: AppBar(
-  backgroundColor: Colors.black,
-  title: Text(
-    "Welcome,\n$name",
-    style: const TextStyle(
-      color: Colors.yellowAccent,
-      fontWeight: FontWeight.bold,
-      letterSpacing: 1.2,
-    ),
-  ),
-  actions: [
-    // --- NEW QR CODE BUTTON ---
-    IconButton(
-      onPressed: () => _showRegistrationQR(context),
-      icon: const Icon(Icons.qr_code_2, color: Colors.yellowAccent, size: 28),
-    ),
-    IconButton(
-      onPressed: _logout,
-      icon: const Icon(Icons.logout, color: Colors.redAccent),
-    )
-  ],
-),
-    
-    body: SingleChildScrollView(
+
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: Colors.yellowAccent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.yellowAccent.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.verified_user, color: Colors.yellowAccent),
-                  const SizedBox(width: 12),
-                  const Text(
-                    "SaaS Service: ",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  const Text(
-                    "ACTIVE",
-                    style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
+            _buildAttendanceStatusCard(),
             const SizedBox(height: 25),
 
             Row(
               children: [
-              loadingStats
-              ? _buildStatCard("REVENUE", "--", Icons.monetization_on, Colors.greenAccent)
-              : _buildStatCard(
+                _buildStatCard(
                   "REVENUE",
                   "Rs ${totalRevenue.toStringAsFixed(0)}",
                   Icons.monetization_on,
                   Colors.greenAccent,
                 ),
-
-          const SizedBox(width: 15),
-
-          loadingStats
-              ? _buildStatCard("MEMBERS", "--", Icons.group, Colors.blueAccent)
-              : _buildStatCard(
+                const SizedBox(width: 15),
+                _buildStatCard(
                   "MEMBERS",
                   totalMembers.toString(),
                   Icons.group,
                   Colors.blueAccent,
                 ),
-
-
-
               ],
             ),
+            
             const SizedBox(height: 30),
-
-
-            const Text(
-              "MANAGE MEMBERS",
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 15),
-            
-            
-            TextField(
-  controller: _searchController,
-  onChanged: _onSearchChanged,
-  style: const TextStyle(color: Colors.white),
-  decoration: InputDecoration(
-    hintText: "Search member name or ID...",
-    hintStyle: const TextStyle(color: Colors.white38),
-    prefixIcon: const Icon(Icons.search, color: Colors.yellowAccent),
-    filled: true,
-    fillColor: Colors.white.withOpacity(0.05),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Colors.white24),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Colors.yellowAccent),
-    ),
-  ),
-),
-
-            
+            _buildSearchSection(),
             const SizedBox(height: 20),
 
-
-  loadingMembers
-    ? const Center(
-        child: Padding(
-          padding: EdgeInsets.all(30),
-          child: CircularProgressIndicator(
-            color: Colors.yellowAccent,
-          ),
-        ),
-      )
-    : filteredMembers.isEmpty
-        ? const Center(
-            child: Padding(
-              padding: EdgeInsets.all(30),
-              child: Text(
-                "No members found",
-                style: TextStyle(color: Colors.white38),
-              ),
-            ),
-          )
-        : ListView.builder(
-  shrinkWrap: true,
-  physics: const NeverScrollableScrollPhysics(),
-  itemCount: filteredMembers.length,
-  itemBuilder: (context, index) {
-    final member = filteredMembers[index];
-    return _buildMemberTile(member: member);
-  },
-),
-
-            
-          
-          
+            loadingMembers
+                ? const Center(child: CircularProgressIndicator(color: Colors.yellowAccent))
+                : filteredMembers.isEmpty
+                    ? const Center(child: Text("No members found", style: TextStyle(color: Colors.white38)))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredMembers.length,
+                        itemBuilder: (context, index) {
+                          final member = filteredMembers[index];
+                          return _buildMemberTile(member: member);
+                        },
+                      ),
           ],
         ),
       ),
+    );
+  }
+
+
+  Widget _buildAttendanceStatusCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.yellowAccent,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("TODAY'S ATTENDANCE", 
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+              SizedBox(height: 5),
+              Text(
+                "$todayAttendanceCount Members",
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+            ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.how_to_reg, color: Colors.black, size: 30),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "MANAGE MEMBERS",
+          style: TextStyle(color: Colors.yellowAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        ),
+        const SizedBox(height: 15),
+        TextField(
+          controller: _searchController,
+          onChanged: _onSearchChanged,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: "Search member name or ID...",
+            hintStyle: const TextStyle(color: Colors.white38),
+            prefixIcon: const Icon(Icons.search, color: Colors.yellowAccent),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.05),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.white24),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.yellowAccent),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -374,7 +457,7 @@ Widget build(BuildContext context) {
     );
   }
 
-Widget _buildMemberTile({required Map<String, dynamic> member}) {
+  Widget _buildMemberTile({required Map<String, dynamic> member}) {
   return GestureDetector(
     onTap: () {
       Navigator.push(
