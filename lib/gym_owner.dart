@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter/services.dart';
 
-
 import 'auth/login.dart';
 import 'member_detail.dart';
-
 
 class GymOwner extends StatefulWidget {
   const GymOwner({super.key});
@@ -20,12 +15,9 @@ class GymOwner extends StatefulWidget {
 }
 
 class _GymOwnerState extends State<GymOwner> {
-  
   final TextEditingController _searchController = TextEditingController();
 
-
   bool _isLoggingOut = false;
-
 
   double totalRevenue = 0;
   int totalMembers = 0;
@@ -41,185 +33,242 @@ class _GymOwnerState extends State<GymOwner> {
 
   int todayAttendanceCount = 0;
 
+  Future<void> fetchGymStats() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final firestore = FirebaseFirestore.instance;
 
+    final gymQuery = await firestore
+        .collection('gyms')
+        .where('ownerUid', isEqualTo: uid)
+        .limit(1)
+        .get();
 
-Future<void> fetchGymStats() async {
+    if (gymQuery.docs.isEmpty) {
+      setState(() => loadingStats = false);
+      return;
+    }
 
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-  final firestore = FirebaseFirestore.instance;
+    gymId = gymQuery.docs.first.id;
 
-  final gymQuery = await firestore
-      .collection('gyms')
-      .where('ownerUid', isEqualTo: uid)
-      .limit(1)
-      .get();
+    final membersSnapshot = await firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('members')
+        .get();
 
-  if (gymQuery.docs.isEmpty) {
-    setState(() => loadingStats = false);
-    return;
+    final today = DateTime.now();
+    final todayKey =
+        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+    final attendanceSnapshot = await firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('attendance')
+        .where('date', isEqualTo: todayKey)
+        .get();
+
+    todayAttendanceCount = attendanceSnapshot.size;
+
+    final paymentsSnapshot = await firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('payments')
+        .get();
+
+    double revenue = 0;
+    for (var doc in paymentsSnapshot.docs) {
+      revenue += (doc['amount'] as num).toDouble();
+    }
+
+    setState(() {
+      totalMembers = membersSnapshot.size;
+      totalRevenue = revenue;
+      loadingStats = false;
+      name = gymQuery.docs.first['gymName'] ?? 'Owner';
+      gymCode = gymQuery.docs.first['registrationCode'] ?? '';
+    });
+
+    await fetchMembers();
   }
 
+  Future<void> fetchMembers() async {
+    if (gymId == null) return;
 
-  gymId = gymQuery.docs.first.id;
+    setState(() {
+      loadingMembers = true;
+    });
 
-  final membersSnapshot = await firestore
-      .collection('gyms')
-      .doc(gymId)
-      .collection('members')
-      .get();
+    final firestore = FirebaseFirestore.instance;
 
-  
-  final today = DateTime.now();
-final todayKey =
-    "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+    final membersSnapshot = await firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('members')
+        .get();
 
-final attendanceSnapshot = await firestore
-    .collection('gyms')
-    .doc(gymId)
-    .collection('attendance')
-    .where('date', isEqualTo: todayKey)
-    .get();
+    List<Map<String, dynamic>> members = [];
 
-todayAttendanceCount = attendanceSnapshot.size;
+    for (var doc in membersSnapshot.docs) {
+      final uid = doc.id;
+      final data = doc.data();
 
+      final userDoc = await firestore.collection('users').doc(uid).get();
 
+      members.add({
+        'id': uid.substring(0, 6).toUpperCase(),
+        'uid': uid,
+        'name': userDoc.exists ? userDoc['name'] ?? 'Unknown' : 'Unknown',
+        'status': data['status'] ?? 'Pending',
+        'membershipPlan': data['membershipPlan'],
+        'validUntil': data['validUntil'],
+        'totalFeesPaid': data['totalFeesPaid'] ?? 0,
+      });
+    }
 
-
-  final paymentsSnapshot = await firestore
-      .collection('gyms')
-      .doc(gymId)
-      .collection('payments')
-      .get();
-
-  double revenue = 0;
-  for (var doc in paymentsSnapshot.docs) {
-    revenue += (doc['amount'] as num).toDouble();
-  }
-
-  setState(() {
-    totalMembers = membersSnapshot.size;
-    totalRevenue = revenue;
-    loadingStats = false;
-    name = gymQuery.docs.first['gymName'] ?? 'Owner';
-    gymCode = gymQuery.docs.first['registrationCode'] ?? '';
-  });
-
-  await fetchMembers();
-}
-
-Future<void> fetchMembers() async {
-  if (gymId == null) return;
-
-  setState(() {
-    loadingMembers = true;
-  });
-
-  final firestore = FirebaseFirestore.instance;
-
-  final membersSnapshot = await firestore
-      .collection('gyms')
-      .doc(gymId)
-      .collection('members')
-      .get();
-
-  List<Map<String, dynamic>> members = [];
-
-  for (var doc in membersSnapshot.docs) {
-    final uid = doc.id;
-    final data = doc.data();
-
-    final userDoc =
-        await firestore.collection('users').doc(uid).get();
-
-    members.add({
-      'id': uid.substring(0, 6).toUpperCase(),
-      'uid': uid,
-      'name': userDoc.exists ? userDoc['name'] ?? 'Unknown' : 'Unknown',
-      'status': data['status'] ?? 'Pending',
-      'membershipPlan': data['membershipPlan'],
-      'validUntil': data['validUntil'],
-      'totalFeesPaid': data['totalFeesPaid'] ?? 0,
+    setState(() {
+      allMembers = members;
+      filteredMembers = members;
+      loadingMembers = false;
     });
   }
 
-  setState(() {
-    allMembers = members;
-    filteredMembers = members;
-    loadingMembers = false;
-  });
-}
+  void _onSearchChanged(String query) {
+    query = query.toLowerCase();
 
+    setState(() {
+      filteredMembers = allMembers.where((member) {
+        return member['name'].toLowerCase().contains(query) ||
+            member['id'].toLowerCase().contains(query);
+      }).toList();
+    });
+  }
 
-void _onSearchChanged(String query) {
-  query = query.toLowerCase();
-
-  setState(() {
-    filteredMembers = allMembers.where((member) {
-      return member['name'].toLowerCase().contains(query) ||
-             member['id'].toLowerCase().contains(query);
-    }).toList();
-  });
-}
-
-
+  
 void _showAttendanceQR() {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (_) {
-      return StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('gyms')
-            .doc(gymId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection('gyms').doc(gymId).snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator(color: Colors.yellowAccent));
+            }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          final token = data['currentAttendanceQrToken'];
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final token = data['currentAttendanceQrToken'] ?? 'no-token';
+            final qrData = "$gymId|$token";
 
-          return Container(
-            padding: const EdgeInsets.all(30),
-            decoration: const BoxDecoration(
-              color: Color(0xFF121212),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "SCAN TO MARK ATTENDANCE",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(15),
-                  child: QrImageView(
-                    data: "$gymId|$token",
-                    size: 220,
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag Handle
+                  Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-
-
-@override
-
-void initState() {
-  super.initState();
-  fetchGymStats();
-}
-
-
+                  const SizedBox(height: 25),
+                  const Text(
+                    "MEMBER CHECK-IN",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Scan the QR code to mark your attendance",
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                  const SizedBox(height: 30),
+                  // Glowing QR Container
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.yellowAccent.withOpacity(0.15),
+                          blurRadius: 30,
+                          spreadRadius: 5,
+                        )
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(20),
+                    child: QrImageView(
+                      data: qrData,
+                      version: QrVersions.auto,
+                      size: 240,
+                      eyeStyle: const QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: Colors.black,
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.circle,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  // Token Display Area
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          "ACTIVE TOKEN",
+                          style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        SelectableText(
+                          qrData,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.yellowAccent,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  
+  
+  @override
+  void initState() {
+    super.initState();
+    fetchGymStats();
+  }
 
   Future<void> _logout() async {
     setState(() {
@@ -228,7 +277,7 @@ void initState() {
 
     try {
       await FirebaseAuth.instance.signOut();
-      
+
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const Login()),
@@ -247,15 +296,7 @@ void initState() {
     }
   }
 
-
-
-
-
   @override
-
-
-
-@override
   Widget build(BuildContext context) {
     if (loadingStats) {
       return const Scaffold(
@@ -294,8 +335,6 @@ void initState() {
           )
         ],
       ),
-      
-      
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAttendanceQR,
         backgroundColor: Colors.yellowAccent,
@@ -309,8 +348,6 @@ void initState() {
           ),
         ),
       ),
-
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -318,7 +355,6 @@ void initState() {
           children: [
             _buildAttendanceStatusCard(),
             const SizedBox(height: 25),
-
             Row(
               children: [
                 _buildStatCard(
@@ -336,15 +372,15 @@ void initState() {
                 ),
               ],
             ),
-            
             const SizedBox(height: 30),
             _buildSearchSection(),
             const SizedBox(height: 20),
-
             loadingMembers
                 ? const Center(child: CircularProgressIndicator(color: Colors.yellowAccent))
                 : filteredMembers.isEmpty
-                    ? const Center(child: Text("No members found", style: TextStyle(color: Colors.white38)))
+                    ? const Center(
+                        child: Text("No members found",
+                            style: TextStyle(color: Colors.white38)))
                     : ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -359,7 +395,6 @@ void initState() {
       ),
     );
   }
-
 
   Widget _buildAttendanceStatusCard() {
     return Container(
@@ -518,7 +553,7 @@ void initState() {
 }
 
 
-void _showRegistrationQR(BuildContext context) {
+  void _showRegistrationQR(BuildContext context) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -648,9 +683,8 @@ void _showRegistrationQR(BuildContext context) {
   );
 }
 
-void _showCustomToast(BuildContext context, String message) {
+  void _showCustomToast(BuildContext context, String message) {
   OverlayEntry? overlayEntry;
-
   overlayEntry = OverlayEntry(
     builder: (context) => _ToastWidget(
       message: message,
@@ -665,7 +699,11 @@ void _showCustomToast(BuildContext context, String message) {
 
 
 
+
+
 }
+
+
 
 
 
@@ -756,6 +794,9 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
     );
   }
 }
+
+
+
 
 
 
