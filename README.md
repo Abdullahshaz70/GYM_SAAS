@@ -52,7 +52,13 @@ gyms/{gymId}/payments/{paymentId}
 - method: String
 - verified: Boolean
 - timestamp: Timestamp
+- transactionId: String             // unique ID from Easypaisa/JazzCash
+- plan: String                      // the plan this payment is for
+- validUntil: Timestamp             // member’s subscription validity after this payment
+- createdAt: Timestamp              // when the payment was created in DB
+- status: String                    // pending | completed | failed
 
+    
 
 
 users/{uid}
@@ -70,7 +76,9 @@ users/{uid}
 gyms/{gymId}/attendance/{attendanceId}
 - memberId: String
 - date: String              // "2026-01-04" (YYYY-MM-DD)
-
+- markedBy: admin | user
+- status : present | absent
+- timeStamp : TimeStamp
 
 
 

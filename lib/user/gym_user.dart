@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../qr_scan.dart'; 
-
-
-// import 'package:mobile_scanner/mobile_scanner.dart';
-// import 'dart:io';
-// import 'qr_scan.dart';
+import 'package:intl/intl.dart';
+import '../qr_scan.dart';
 
 class GymUser extends StatefulWidget {
   const GymUser({super.key});
@@ -23,7 +19,12 @@ class _GymUser extends State<GymUser> {
 
   Set<String> presentDates = {};
   String gymId = "";
-  String userName = "User";
+  String userName = "Athlete";
+  
+  String feeStatus = "unpaid";
+  String plan = "Standard";
+  String expiryDate = "---";
+  bool isPaid = false;
 
   @override
   void initState() {
@@ -31,131 +32,126 @@ class _GymUser extends State<GymUser> {
     _loadUserData();
   }
 
-  Future<void> _loadUserData() async {
-    final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+  // 1. FORMATTER: Converts DateTime to YYYY-MM-DD string for internal tracking
+  String _formatDate(DateTime d) {
+    return "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+  }
 
-    if (mounted) {
-      setState(() {
-        gymId = userDoc['gymId'] ?? "";
-        userName = userDoc['name'] ?? "Athlete";
-      });
-      await _loadAttendance();
+  Future<void> _loadUserData() async {
+    final firestore = FirebaseFirestore.instance;
+    
+    try {
+      final userDoc = await firestore.collection('users').doc(user.uid).get();
+
+      if (mounted && userDoc.exists) {
+        setState(() {
+          gymId = userDoc['gymId'] ?? "";
+          userName = userDoc['name'] ?? "Athlete";
+        });
+
+        if (gymId.isNotEmpty) {
+          final memberDoc = await firestore
+              .collection('gyms')
+              .doc(gymId)
+              .collection('members')
+              .doc(user.uid)
+              .get();
+
+          if (memberDoc.exists) {
+            final data = memberDoc.data()!;
+            setState(() {
+              // Exact field names from your screenshot
+              feeStatus = data['feeStatus'] ?? "unpaid";
+              plan = data['plan'] ?? "Monthly";
+              isPaid = feeStatus.toLowerCase() == "paid";
+              
+              if (data['validUntil'] != null) {
+                DateTime date = (data['validUntil'] as Timestamp).toDate();
+                expiryDate = DateFormat('dd MMM yyyy').format(date);
+              }
+            });
+          }
+          await _loadAttendance();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading user data: $e");
     }
   }
 
+  // 2. LOAD ATTENDANCE: Converts Firestore Timestamps to strings for the Calendar
   Future<void> _loadAttendance() async {
     if (gymId.isEmpty) return;
 
-    final snap = await FirebaseFirestore.instance
-        .collection('gyms')
-        .doc(gymId)
-        .collection('attendance')
-        .where('memberId', isEqualTo: user.uid)
-        .get();
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('gyms')
+          .doc(gymId)
+          .collection('attendance')
+          .where('memberId', isEqualTo: user.uid)
+          .get();
 
-    final dates = snap.docs.map((d) => d['date'] as String).toSet();
+      final Set<String> dates = {};
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        if (data['timestamp'] != null) {
+          // Extract DateTime from the Firestore Timestamp
+          DateTime dt = (data['timestamp'] as Timestamp).toDate();
+          dates.add(_formatDate(dt)); // Store as "YYYY-MM-DD"
+        }
+      }
 
-    if (mounted) {
-      setState(() {
-        presentDates = dates;
-      });
+      if (mounted) {
+        setState(() {
+          presentDates = dates;
+        });
+      }
+    } catch (e) {
+      debugPrint("Attendance load error: $e");
     }
   }
 
   bool _isPresent(DateTime day) => presentDates.contains(_formatDate(day));
 
-  String _formatDate(DateTime d) =>
-      "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+  Future<void> _markAttendance(String scannedToken) async {
+    try {
+      final todayKey = _formatDate(DateTime.now());
 
-
-
-
-Future<void> _markAttendance(String scannedToken) async {
-  try {
-    scannedToken = scannedToken.trim();
-    if (scannedToken.isEmpty) throw "The scanned QR code is empty.";
-
-    if (gymId.isEmpty) throw "Your gym is not assigned!";
-
-    final todayKey = _formatDate(DateTime.now());
-
-    final attendanceCollection = FirebaseFirestore.instance
-        .collection('gyms')
-        .doc(gymId)        
-        .collection('attendance');
-
-    final querySnap = await attendanceCollection
-        .where('memberId', isEqualTo: user.uid)
-        .where('date', isEqualTo: todayKey)
-        .limit(1)
-        .get();
-
-    if (querySnap.docs.isNotEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("ℹ️ You already checked in today!"),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (presentDates.contains(todayKey)) {
+        _showSnackBar("ℹ️ You already checked in today!", Colors.orange);
+        return;
       }
-      return;
-    }
 
-    await attendanceCollection.add({
-      "memberId": user.uid,
-      "date": todayKey,
-      "timestamp": FieldValue.serverTimestamp(),
-    });
-
-    if (mounted) {
-      setState(() {
-        presentDates.add(todayKey);
+      await FirebaseFirestore.instance
+          .collection('gyms')
+          .doc(gymId)
+          .collection('attendance')
+          .add({
+        "memberId": user.uid,
+        "status": "present",
+        "markedBy": "member",
+        "timestamp": FieldValue.serverTimestamp(),
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("✅ Attendance marked successfully!"),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("❌ Error: $e"),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+
+      setState(() => presentDates.add(todayKey));
+      _showSnackBar("✅ Attendance marked successfully!", Colors.green);
+      
+    } catch (e) {
+      _showSnackBar("❌ Error: $e", Colors.redAccent);
     }
   }
-}
 
-
-
-// void _showStatusSnackBar(String message, Color color) {
-//   ScaffoldMessenger.of(context).showSnackBar(
-//     SnackBar(
-//       content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
-//       backgroundColor: color,
-//       behavior: SnackBarBehavior.floating,
-//     ),
-//   );
-// }
-
+  void _showSnackBar(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating),
+    );
+  }
 
   void _openQRScanner() async {
-    // We wait for the 'code' returned from the Scanner Page
     final String? scannedCode = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const QRScannerPage()),
     );
-
-    // If a code was actually scanned (not just back-button pressed)
     if (scannedCode != null && scannedCode.isNotEmpty) {
       _markAttendance(scannedCode);
     }
@@ -168,114 +164,137 @@ Future<void> _markAttendance(String scannedToken) async {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.black,
-        foregroundColor: Colors.yellowAccent,
-        title: const Text("PRO TRACKER",
-            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        title: const Text("PRO TRACKER", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.yellowAccent)),
         actions: [
-          IconButton(
-              onPressed: () => FirebaseAuth.instance.signOut(),
-              icon: const Icon(Icons.logout, color: Colors.yellowAccent))
+          IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout, color: Colors.yellowAccent))
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openQRScanner,
         backgroundColor: Colors.yellowAccent,
         icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
-        label: const Text("CHECK IN",
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        label: const Text("CHECK IN", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text("Welcome back,", style: TextStyle(fontSize: 16, color: Colors.grey)),
-            Text(userName.toUpperCase(),
-                style: const TextStyle(
-                    fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 25),
-            _buildStatsCard(),
-            const SizedBox(height: 30),
-            const Text("ATTENDANCE HISTORY",
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.yellowAccent,
-                    letterSpacing: 1.5)),
-            const SizedBox(height: 15),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.white10, width: 1),
-              ),
-              child: TableCalendar(
-                firstDay: DateTime.utc(2023, 1, 1),
-                lastDay: DateTime.utc(2035, 12, 31),
-                focusedDay: focusedDay,
-                daysOfWeekStyle: const DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(color: Colors.grey),
-                  weekendStyle: TextStyle(color: Colors.yellowAccent),
+      body: RefreshIndicator(
+        onRefresh: _loadUserData,
+        color: Colors.yellowAccent,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Welcome back,", style: TextStyle(fontSize: 16, color: Colors.grey)),
+                Text(userName.toUpperCase(), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 25),
+                Row(
+                  children: [
+                    Expanded(child: _buildStatTile("SESSIONS", "${presentDates.length}", Icons.bolt)),
+                    const SizedBox(width: 15),
+                    Expanded(child: _buildStatTile("PLAN", plan, Icons.workspace_premium)),
+                  ],
                 ),
-                headerStyle: const HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                  titleTextStyle:
-                      TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  leftChevronIcon: Icon(Icons.chevron_left, color: Colors.yellowAccent),
-                  rightChevronIcon:
-                      Icon(Icons.chevron_right, color: Colors.yellowAccent),
-                ),
-                calendarStyle: const CalendarStyle(
-                  defaultTextStyle: TextStyle(color: Colors.white),
-                  weekendTextStyle: TextStyle(color: Colors.white70),
-                  todayDecoration:
-                      BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-                ),
-                calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, _) =>
-                      _isPresent(day) ? _presentDay(day) : null,
-                  todayBuilder: (context, day, _) =>
-                      _isPresent(day) ? _presentDay(day) : null,
-                ),
-                onDaySelected: (selected, focused) {
-                  setState(() {
-                    selectedDay = selected;
-                    focusedDay = focused;
-                  });
-                },
-              ),
+                const SizedBox(height: 20),
+                _buildPaymentCard(),
+                const SizedBox(height: 30),
+                const Text("ATTENDANCE HISTORY", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.yellowAccent, letterSpacing: 1.5)),
+                const SizedBox(height: 15),
+                _buildCalendar(),
+                const SizedBox(height: 100),
+              ],
             ),
-            const SizedBox(height: 30),
-          ]),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStatsCard() {
+  Widget _buildStatTile(String label, String value, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(
-        color: Colors.yellowAccent,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.yellowAccent, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Icon(icon, color: Colors.black, size: 20),
+          const SizedBox(height: 10),
+          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 10, fontWeight: FontWeight.bold)),
+          Text(value, style: const TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("TOTAL SESSIONS",
-                  style:
-                      TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.bold)),
-              Text("${presentDates.length}",
-                  style: const TextStyle(
-                      color: Colors.black, fontSize: 40, fontWeight: FontWeight.bold)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("STATUS", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                  const SizedBox(height: 5),
+                  Text(feeStatus.toUpperCase(), style: TextStyle(color: isPaid ? Colors.greenAccent : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text("EXPIRES ON", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                  const SizedBox(height: 5),
+                  Text(expiryDate, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ],
           ),
-          const Icon(Icons.fitness_center_rounded, color: Colors.black, size: 50),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isPaid ? Colors.white10 : Colors.yellowAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              ),
+              onPressed: isPaid ? null : () => _showPaymentSheet(),
+              child: Text(isPaid ? "MEMBERSHIP ACTIVE" : "PAY FEES NOW", style: TextStyle(color: isPaid ? Colors.white38 : Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          )
         ],
+      ),
+    );
+  }
+
+  Widget _buildCalendar() {
+    return Container(
+      decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white10)),
+      child: TableCalendar(
+        firstDay: DateTime.utc(2023, 1, 1),
+        lastDay: DateTime.utc(2035, 12, 31),
+        focusedDay: focusedDay,
+        selectedDayPredicate: (day) => isSameDay(selectedDay, day),
+        headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true, titleTextStyle: TextStyle(color: Colors.white)),
+        calendarStyle: const CalendarStyle(defaultTextStyle: TextStyle(color: Colors.white), weekendTextStyle: TextStyle(color: Colors.white70)),
+        calendarBuilders: CalendarBuilders(
+          defaultBuilder: (context, day, _) => _isPresent(day) ? _presentDay(day) : null,
+          todayBuilder: (context, day, _) => _isPresent(day) ? _presentDay(day) : null,
+        ),
+        onDaySelected: (selected, focused) {
+          setState(() {
+            selectedDay = selected;
+            focusedDay = focused;
+          });
+        },
       ),
     );
   }
@@ -283,25 +302,39 @@ Future<void> _markAttendance(String scannedToken) async {
   Widget _presentDay(DateTime day) {
     return Container(
       margin: const EdgeInsets.all(6),
-      decoration: const BoxDecoration(color: Colors.yellowAccent, shape: BoxShape.circle),
+      decoration: const BoxDecoration(
+        color: Colors.yellowAccent, 
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: Colors.yellowAccent, blurRadius: 4)]
+      ),
       alignment: Alignment.center,
-      child: Text('${day.day}',
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      child: Text('${day.day}', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
     );
   }
 
-
+  void _showPaymentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(30),
+        decoration: const BoxDecoration(color: Color(0xFF121212), borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 25),
+            const Text("UPI PAYMENT", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet, color: Colors.yellowAccent),
+              title: const Text("Pay via Google Pay / PhonePe", style: TextStyle(color: Colors.white)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
