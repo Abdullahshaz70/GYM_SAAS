@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:saas/qr_scan.dart';
 import 'register.dart';
 
-import '../gym_owner.dart';
-import '../gym_user.dart';
+import '../owner/gym_owner.dart';
+import '../user/gym_user.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});

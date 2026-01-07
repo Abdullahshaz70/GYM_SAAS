@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'auth/register.dart';
-import 'gym_owner.dart';
+import 'owner/gym_owner.dart';
 import 'auth/login.dart';
 
 import 'auth_wrapper.dart';
