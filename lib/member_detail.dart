@@ -35,14 +35,18 @@
     bool feesLoading = true;
     List<Map<String, dynamic>> fees = [];
 
-
-
     List<Map<String, dynamic>> payments = [];
+
+    bool attendanceLoading = true;
+    List<String> attendanceDates = [];
+
 
     @override
     void initState() {
       super.initState();
-      fetchMemberDetails().then((_) => fetchFees());
+      fetchMemberDetails()
+      .then((_) => fetchFees())
+      .then((_) => fetchAttendance());
     }
 
     Future<void> fetchMemberDetails() async {
@@ -250,6 +254,36 @@
       ),
     );
   }
+
+Future<void> fetchAttendance() async {
+  setState(() => attendanceLoading = true);
+
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('gyms')
+        .doc(widget.gymId)
+        .collection('attendance')
+        .where('memberId', isEqualTo: widget.uid)
+        .orderBy('timestamp', descending: true) 
+        .get();
+
+    setState(() {
+      attendanceDates = snapshot.docs.map((doc) {
+        final ts = doc['timestamp'] as Timestamp;
+        return DateFormat('yyyy-MM-dd').format(ts.toDate());
+      }).toList();
+
+      attendanceLoading = false;
+    });
+  } catch (e) {
+  debugPrint("Attendance fetch error: $e");
+  setState(() {
+    attendanceDates = [];
+    attendanceLoading = false;
+  });
+}
+
+}
 
 
 
@@ -488,6 +522,43 @@ feesLoading
 
 
 
+const SizedBox(height: 40),
+_sectionHeader("ATTENDANCE HISTORY"),
+const SizedBox(height: 15),
+
+attendanceLoading
+    ? const Padding(
+        padding: EdgeInsets.all(20),
+        child: CircularProgressIndicator(color: Colors.yellowAccent),
+      )
+    : attendanceDates.isEmpty
+        ? Container(
+            padding: const EdgeInsets.symmetric(vertical: 30),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.event_busy, color: Colors.white24, size: 40),
+                SizedBox(height: 10),
+                Text(
+                  "No attendance records",
+                  style: TextStyle(color: Colors.white38),
+                ),
+              ],
+            ),
+          )
+        : Column(
+            children: attendanceDates.map((date) {
+              return _attendanceTile(date);
+            }).toList(),
+          ),
+
+
+
+
             ],
           ),
         ),
@@ -589,6 +660,32 @@ feesLoading
           paid ? Icons.check_circle : Icons.error_outline,
           color: paid ? Colors.green : Colors.red,
           size: 16,
+        ),
+      ],
+    ),
+  );
+}
+
+
+  Widget _attendanceTile(String date) {
+  final formattedDate =
+      DateFormat('dd MMM yyyy').format(DateTime.parse(date));
+
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.greenAccent.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.check_circle, color: Colors.greenAccent, size: 18),
+        const SizedBox(width: 12),
+        Text(
+          formattedDate,
+          style: const TextStyle(color: Colors.white),
         ),
       ],
     ),

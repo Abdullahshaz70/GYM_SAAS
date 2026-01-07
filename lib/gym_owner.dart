@@ -159,7 +159,7 @@ void _showAttendanceQR() {
 
             final data = snapshot.data!.data() as Map<String, dynamic>;
             final token = data['currentAttendanceQrToken'] ?? 'no-token';
-            final qrData = "$gymId|$token";
+            final qrData = "$token";
 
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
