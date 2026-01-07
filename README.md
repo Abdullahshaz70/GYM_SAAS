@@ -61,7 +61,6 @@ users/{uid}
 - role: String              // superAdmin | owner | member
 - gymId: String | null
 - isVerified: Boolean
-- status: String            // active | pending | blocked
 - createdAt: Timestamp
 - contactNumber: String
 
@@ -80,15 +79,11 @@ member(sub collection)
 - uid: String                 // same as documentId (users/{uid})
 - name: String
 - contactNumber: String
-
-- status: String              // active | inactive | blocked
+- plan: String                 // member-specific plan: free | basic | pro
 - joinedAt: Timestamp
-
 - currentFee: Number          // editable (default from gym OR custom)
-
 - feeStatus: String           // paid | unpaid | overdue
 - validUntil: Timestamp | null
-
 - createdBy: String           // ownerUid
 - createdAt: Timestamp
 

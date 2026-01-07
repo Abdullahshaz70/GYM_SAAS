@@ -37,77 +37,167 @@ class _RegisterState extends State<Register> {
     super.dispose();
   }
 
+
+
   Future<void> handleRegistration({
-    required String name,
-    required String email,
-    required String password,
-    required String gymCode,
-    required String contactNumber,
-  }) async {
-    final auth = FirebaseAuth.instance;
-    final firestore = FirebaseFirestore.instance;
+  required String name,
+  required String email,
+  required String password,
+  required String gymCode,
+  required String contactNumber,
+}) async {
+  final auth = FirebaseAuth.instance;
+  final firestore = FirebaseFirestore.instance;
 
-    final gymQuery = await firestore
-        .collection('gyms')
-        .where('registrationCode', isEqualTo: gymCode)
-        .limit(1)
-        .get();
+  // 1️⃣ Find gym by registration code
+  final gymQuery = await firestore
+      .collection('gyms')
+      .where('registrationCode', isEqualTo: gymCode)
+      .limit(1)
+      .get();
 
-    if (gymQuery.docs.isEmpty) {
-      throw 'Invalid Gym Code. Please scan a valid gym QR.';
-    }
-
-    final gymData = gymQuery.docs.first.data();
-    final bool isSaaSActive = gymData['isSaaSActive'] ?? false;
-
-    if (!isSaaSActive) {
-      throw 'This gym is currently not accepting new digital registrations.';
-    }
-
-    final gymId = gymQuery.docs.first.id;
-
-    final userCheck = await firestore
-        .collection('users')
-        .where('email', isEqualTo: email)
-        .get();
-    
-    if (userCheck.docs.isNotEmpty) {
-      throw 'This email is already registered.';
-    }
-
-    UserCredential credential = await auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-
-    final uid = credential.user!.uid;
-
-    WriteBatch batch = firestore.batch();
-
-    batch.set(firestore.collection('users').doc(uid), {
-      'name': name,
-      'email': email,
-      'contactNumber': contactNumber,
-      'role': 'member',
-      'gymId': gymId,
-      'isVerified': false,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    batch.set(firestore.collection('gyms').doc(gymId).collection('members').doc(uid), {
-      'status': 'unpaid',
-      'membershipPlan': 'Monthly',
-      'validUntil': null,
-      'lastPaymentDate': null,
-      'totalFeesPaid': 0,
-      'uid': uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
-    await credential.user!.sendEmailVerification();
-    await auth.signOut();
+  if (gymQuery.docs.isEmpty) {
+    throw 'Invalid Gym Code. Please scan a valid gym QR.';
   }
+
+  final gymDoc = gymQuery.docs.first;
+  final gymData = gymDoc.data();
+  final gymId = gymDoc.id;
+
+  final bool isSaaSActive = gymData['isSaaSActive'] ?? false;
+  if (!isSaaSActive) {
+    throw 'This gym is currently not accepting new digital registrations.';
+  }
+
+  // 2️⃣ Check if user already exists
+  final userCheck = await firestore
+      .collection('users')
+      .where('email', isEqualTo: email)
+      .get();
+
+  if (userCheck.docs.isNotEmpty) {
+    throw 'This email is already registered.';
+  }
+
+  // 3️⃣ Create user in Firebase Auth
+  UserCredential credential = await auth.createUserWithEmailAndPassword(
+    email: email,
+    password: password,
+  );
+
+  final uid = credential.user!.uid;
+
+  // 4️⃣ Create Firestore documents using batch
+  WriteBatch batch = firestore.batch();
+
+  // 4a️⃣ users/{uid}
+  batch.set(firestore.collection('users').doc(uid), {
+    'name': name,
+    'email': email,
+    'contactNumber': contactNumber,
+    'role': 'member',
+    'gymId': gymId,
+    'isVerified': false,
+    'status': 'pending', // new member status
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+
+  // 4b️⃣ gyms/{gymId}/members/{uid}
+  batch.set(firestore.collection('gyms').doc(gymId).collection('members').doc(uid), {
+    'uid': uid,
+    'name': name,
+    'contactNumber': contactNumber,
+    'plan': 'Monthly', // default member plan
+    'currentFee': gymData['defaultFee'] ?? 0, // default fee from gym
+    'feeStatus': 'unpaid', // new member fee status
+    'validUntil': null,
+    'createdBy': gymData['ownerUid'] ?? '', // gym owner UID
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+
+  // 5️⃣ Commit batch
+  await batch.commit();
+
+  // 6️⃣ Send email verification
+  await credential.user!.sendEmailVerification();
+
+  // 7️⃣ Sign out user after registration
+  await auth.signOut();
+}
+
+
+
+  // Future<void> handleRegistration({
+  //   required String name,
+  //   required String email,
+  //   required String password,
+  //   required String gymCode,
+  //   required String contactNumber,
+  // }) async {
+  //   final auth = FirebaseAuth.instance;
+  //   final firestore = FirebaseFirestore.instance;
+
+  //   final gymQuery = await firestore
+  //       .collection('gyms')
+  //       .where('registrationCode', isEqualTo: gymCode)
+  //       .limit(1)
+  //       .get();
+
+  //   if (gymQuery.docs.isEmpty) {
+  //     throw 'Invalid Gym Code. Please scan a valid gym QR.';
+  //   }
+
+  //   final gymData = gymQuery.docs.first.data();
+  //   final bool isSaaSActive = gymData['isSaaSActive'] ?? false;
+
+  //   if (!isSaaSActive) {
+  //     throw 'This gym is currently not accepting new digital registrations.';
+  //   }
+
+  //   final gymId = gymQuery.docs.first.id;
+
+  //   final userCheck = await firestore
+  //       .collection('users')
+  //       .where('email', isEqualTo: email)
+  //       .get();
+    
+  //   if (userCheck.docs.isNotEmpty) {
+  //     throw 'This email is already registered.';
+  //   }
+
+  //   UserCredential credential = await auth.createUserWithEmailAndPassword(
+  //     email: email,
+  //     password: password,
+  //   );
+
+  //   final uid = credential.user!.uid;
+
+  //   WriteBatch batch = firestore.batch();
+
+  //   batch.set(firestore.collection('users').doc(uid), {
+  //     'name': name,
+  //     'email': email,
+  //     'contactNumber': contactNumber,
+  //     'role': 'member',
+  //     'gymId': gymId,
+  //     'isVerified': false,
+  //     'createdAt': FieldValue.serverTimestamp(),
+  //   });
+
+  //   batch.set(firestore.collection('gyms').doc(gymId).collection('members').doc(uid), {
+  //     'status': 'unpaid',
+  //     'membershipPlan': 'Monthly',
+  //     'validUntil': null,
+  //     'lastPaymentDate': null,
+  //     'totalFeesPaid': 0,
+  //     'uid': uid,
+  //     'createdAt': FieldValue.serverTimestamp(),
+  //   });
+
+  //   await batch.commit();
+  //   await credential.user!.sendEmailVerification();
+  //   await auth.signOut();
+  // }
 
   void _showSuccessDialog() {
     showDialog(

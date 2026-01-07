@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-// import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../auth/login.dart';
 import 'member_detail.dart';
@@ -92,14 +92,12 @@ class _GymOwnerState extends State<GymOwner> {
   }
 
   Future<void> fetchMembers() async {
-    if (gymId == null) return;
+  if (gymId == null) return;
 
-    setState(() {
-      loadingMembers = true;
-    });
+  setState(() => loadingMembers = true);
+  final firestore = FirebaseFirestore.instance;
 
-    final firestore = FirebaseFirestore.instance;
-
+  try {
     final membersSnapshot = await firestore
         .collection('gyms')
         .doc(gymId)
@@ -111,17 +109,15 @@ class _GymOwnerState extends State<GymOwner> {
     for (var doc in membersSnapshot.docs) {
       final uid = doc.id;
       final data = doc.data();
-
       final userDoc = await firestore.collection('users').doc(uid).get();
 
       members.add({
-        'id': uid.substring(0, 6).toUpperCase(),
         'uid': uid,
-        'name': userDoc.exists ? userDoc['name'] ?? 'Unknown' : 'Unknown',
-        'status': data['status'] ?? 'Pending',
-        'membershipPlan': data['membershipPlan'],
+        'name': userDoc.exists ? (userDoc.data()?['name'] ?? 'Unknown') : 'Unknown',
+        // FIX: Match the UI keys exactly
+        'plan': data['plan'] ?? 'Monthly',          // UI looks for 'plan'
+        'feeStatus': data['feeStatus'] ?? 'unpaid', // UI looks for 'feeStatus'
         'validUntil': data['validUntil'],
-        'totalFeesPaid': data['totalFeesPaid'] ?? 0,
       });
     }
 
@@ -130,7 +126,10 @@ class _GymOwnerState extends State<GymOwner> {
       filteredMembers = members;
       loadingMembers = false;
     });
+  } catch (e) {
+    setState(() => loadingMembers = false);
   }
+}
 
   void _onSearchChanged(String query) {
     query = query.toLowerCase();
@@ -142,9 +141,8 @@ class _GymOwnerState extends State<GymOwner> {
       }).toList();
     });
   }
-
   
-void _showAttendanceQR() {
+  void _showAttendanceQR() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -312,6 +310,8 @@ void _showAttendanceQR() {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      
+      
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
@@ -335,6 +335,8 @@ void _showAttendanceQR() {
           )
         ],
       ),
+      
+      
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAttendanceQR,
         backgroundColor: Colors.yellowAccent,
@@ -348,6 +350,8 @@ void _showAttendanceQR() {
           ),
         ),
       ),
+      
+      
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -372,6 +376,7 @@ void _showAttendanceQR() {
                 ),
               ],
             ),
+            
             const SizedBox(height: 30),
             _buildSearchSection(),
             const SizedBox(height: 20),
@@ -492,57 +497,88 @@ void _showAttendanceQR() {
     );
   }
 
-  Widget _buildMemberTile({required Map<String, dynamic> member}) {
+Widget _buildMemberTile({required Map<String, dynamic> member}) {
+  
+  bool isPaid = member['feeStatus']?.toString().toLowerCase() == "paid";
+  
+
   return GestureDetector(
     onTap: () {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => MemberDetailScreen(
-            uid: member['uid'],  
+            uid: member['uid'] ?? '',  
             gymId: gymId!,
           ),
         ),
       );
     },
     child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 12, left: 2, right: 2),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
+          Stack(
+            alignment: Alignment.center,
             children: [
-              CircleAvatar(
-                backgroundColor: Colors.yellowAccent,
-                child: Text(member['name'][0], style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isPaid ? Colors.greenAccent : Colors.redAccent,
+                    width: 2,
+                  ),
+                ),
               ),
-              const SizedBox(width: 15),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(member['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text("ID: ${member['id']}", style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                ],
+              CircleAvatar(
+                radius: 21,
+                backgroundColor: Colors.yellowAccent.withOpacity(0.1),
+                child: Text(
+                  (member['name'] ?? "G")[0].toUpperCase(),
+                  style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
+          const SizedBox(width: 15),
+          
+          // Info Section
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member['name'] ?? "New Member",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: member['status'] == "Paid" ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              color: isPaid ? Colors.greenAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              member['status'],
+              (member['feeStatus'] ?? "unpaid").toUpperCase(),
               style: TextStyle(
-                color: member['status'] == "Paid" ? Colors.greenAccent : Colors.orangeAccent,
-                fontSize: 12,
+                color: isPaid ? Colors.greenAccent : Colors.redAccent,
+                fontSize: 9,
                 fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
               ),
             ),
           ),
