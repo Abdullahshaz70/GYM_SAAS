@@ -37,19 +37,32 @@ gyms/{gymId}
 - location: String
 - defaultFee: Number
 - registrationCode: String
-- plan: String              // free | basic | pro
+- plan: String              // Monthly | 6 Months | Yearly
 - status: String            // active | suspended | blocked
 - isSaaSActive: Boolean
+
 - createdAt: Timestamp
+
 - attendanceQrExpiresAt: TimeStamp
 - attendanceQrLastGeneratedAt: TimeStamp
 - currentAttendanceQrToken: String
 
 
+gyms/{gymId}/merchantCredentials/{gatewayId}
+- gateway: String              // easypaisa | jazzcash | stripe | paypal | etc.
+- storeId: String
+- hashKey: String              // ENCRYPTED
+- accountNumber: String
+- environment: String          // sandbox | production
+- createdAt: Timestamp
+- updatedAt: Timestamp
+
+
+
 gyms/{gymId}/payments/{paymentId}
 - memberId: String
 - amount: Number
-- method: String
+- method: String                    // easypaisa | jazzcash 
 - verified: Boolean
 - timestamp: Timestamp
 - transactionId: String             // unique ID from Easypaisa/JazzCash
@@ -57,7 +70,7 @@ gyms/{gymId}/payments/{paymentId}
 - validUntil: Timestamp             // member’s subscription validity after this payment
 - createdAt: Timestamp              // when the payment was created in DB
 - status: String                    // pending | completed | failed
-
+- updatedAt: Timestamp
     
 
 
