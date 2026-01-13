@@ -89,6 +89,9 @@ class _GymUserScreen extends State<GymUser> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
   }
 
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,29 +148,105 @@ class _GymUserScreen extends State<GymUser> {
     );
   }
 
-  void _showPaymentSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(30),
-        decoration: const BoxDecoration(color: Color(0xFF121212), borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
-            const SizedBox(height: 25),
-            const Text("UPI PAYMENT", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet, color: Colors.yellowAccent),
-              title: const Text("Pay via Google Pay / PhonePe", style: TextStyle(color: Colors.white)),
-              trailing: const Icon(Icons.chevron_right, color: Colors.white24),
-              onTap: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      ),
-    );
+void _showPaymentSheet() async {
+  // 1. Fetch the data silently or with a quick check
+  final List<Map<String, dynamic>> gateways = await _fs.getGymGateways(gymId);
+
+  if (!mounted) return;
+
+  if (gateways.isEmpty) {
+    _showSnackBar("No payment methods available for this gym.", Colors.orange);
+    return;
   }
+
+  // 2. Display the UI Sheet
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true, // Allows sheet to height-adjust to content
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: const EdgeInsets.fromLTRB(30, 15, 30, 30),
+      decoration: const BoxDecoration(
+        color: Color(0xFF121212),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          const SizedBox(height: 25),
+          const Text(
+            "CHOOSE PAYMENT METHOD",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 15),
+          
+          // Dynamic List of Gateways
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(), // Sheet handles scrolling
+            itemCount: gateways.length,
+            separatorBuilder: (context, index) => const Divider(color: Colors.white10),
+            itemBuilder: (context, index) {
+              final gateway = gateways[index];
+              final String type = (gateway['gateway'] ?? 'other').toLowerCase();
+              
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: _getGatewayIcon(type),
+                title: Text(
+                  type.toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  "Pay with your $type wallet",
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
+                onTap: () {
+                   Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// Helper to keep the builder clean
+Widget _getGatewayIcon(String type) {
+  IconData iconData;
+  switch (type) {
+    case 'easypaisa':
+      iconData = Icons.account_balance_wallet;
+      break;
+    case 'jazzcash':
+      iconData = Icons.phonelink_ring;
+      break;
+    case 'stripe':
+    case 'card':
+      iconData = Icons.credit_card;
+      break;
+    default:
+      iconData = Icons.payment;
+  }
+  return CircleAvatar(
+    backgroundColor: Colors.white.withOpacity(0.05),
+    child: Icon(iconData, color: Colors.yellowAccent),
+  );
+}
 }

@@ -223,9 +223,38 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
                       Expanded(child: Text("Merchant ${index + 1}", style: const TextStyle(color: Colors.white))),
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.redAccent),
-                        onPressed: () {
-                          setState(() => merchantList.removeAt(index));
-                        },
+                       onPressed: () async {
+  final merchantId = merchant.id;
+
+  // 1. If it exists in Firestore, delete it there first
+  if (widget.gymId != null && merchantId.isNotEmpty) {
+    bool confirm = await _showDeleteConfirmation();
+    if (!confirm) return;
+
+    setState(() => isLoading = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('gyms')
+          .doc(widget.gymId)
+          .collection('merchantCredentials')
+          .doc(merchantId)
+          .delete();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Merchant deleted from database"))
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error deleting: $e"))
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  // 2. Remove from the local UI list
+  setState(() => merchantList.removeAt(index));
+},
                       )
                     ],
                   ),
@@ -288,6 +317,28 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
     );
   }
 
+
+Future<bool> _showDeleteConfirmation() async {
+  return await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF121212),
+      title: const Text("Delete Merchant?", style: TextStyle(color: Colors.white)),
+      content: const Text("This will permanently remove these credentials.",
+          style: TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
+        ),
+      ],
+    ),
+  ) ?? false;
+}
 
   @override
   Widget build(BuildContext context) {

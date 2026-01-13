@@ -41,4 +41,23 @@ class FirestoreService {
       "timestamp": FieldValue.serverTimestamp(),
     });
   }
+
+
+    Future<List<Map<String, dynamic>>> getGymGateways(String gymId) async {
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('gyms')
+        .doc(gymId)
+        .collection('merchantCredentials')
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data()).toList();
+  } catch (e) {
+    return [];
+  }
+}
+
+
+
+
 }
