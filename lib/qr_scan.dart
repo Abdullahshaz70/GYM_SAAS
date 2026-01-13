@@ -94,19 +94,11 @@ Positioned(
   right: 20,
   child: CircleAvatar(
     backgroundColor: Colors.black45,
-    child: ValueListenableBuilder<TorchState>(
+    child: IconButton(
+  icon: const Icon(Icons.flash_on, color: Colors.yellowAccent),
+  onPressed: () => controller.toggleTorch(),
+),
 
-      valueListenable: controller.torchState, 
-      builder: (context, state, child) {
-        return IconButton(
-          icon: Icon(
-            state == TorchState.on ? Icons.flash_on : Icons.flash_off,
-            color: state == TorchState.on ? Colors.yellowAccent : Colors.white,
-          ),
-          onPressed: () => controller.toggleTorch(),
-        );
-      },
-    ),
   ),
 ), 
         
