@@ -60,7 +60,7 @@ class _GymUser extends State<GymUser> {
           if (memberDoc.exists) {
             final data = memberDoc.data()!;
             setState(() {
-              // Exact field names from your screenshot
+              
               feeStatus = data['feeStatus'] ?? "unpaid";
               plan = data['plan'] ?? "Monthly";
               isPaid = feeStatus.toLowerCase() == "paid";
