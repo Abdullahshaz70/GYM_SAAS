@@ -8,7 +8,7 @@ import 'auth/register.dart';
 import 'owner/gym_owner.dart';
 import 'auth/login.dart';
 
-import 'auth_wrapper.dart';
+import 'auth/auth_wrapper.dart';
 
 void main() async {
 

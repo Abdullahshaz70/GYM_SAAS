@@ -77,7 +77,7 @@ gyms/{gymId}/payments/{paymentId}
 users/{uid}
 - name: String
 - email: String
-- role: String              // superAdmin | owner | member
+- role: String              // superAdmin | owner | member | staff member
 - gymId: String | null
 - isVerified: Boolean
 - createdAt: Timestamp
