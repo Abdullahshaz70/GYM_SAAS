@@ -48,21 +48,12 @@ gyms/{gymId}
 - currentAttendanceQrToken: String
 
 
-gyms/{gymId}/merchantCredentials/{gatewayId}
-- gateway: String              // easypaisa | jazzcash | stripe | paypal | etc.
-- storeId: String
-- hashKey: String              // ENCRYPTED
-- accountNumber: String
-- environment: String          // sandbox | production
-- createdAt: Timestamp
-- updatedAt: Timestamp
-
 
 
 gyms/{gymId}/payments/{paymentId}
 - memberId: String
 - amount: Number
-- method: String                    // easypaisa | jazzcash 
+- method: String                    // easypaisa | jazzcash | cash
 - verified: Boolean
 - timestamp: Timestamp
 - transactionId: String             // unique ID from Easypaisa/JazzCash
@@ -77,7 +68,7 @@ gyms/{gymId}/payments/{paymentId}
 users/{uid}
 - name: String
 - email: String
-- role: String              // superAdmin | owner | member
+- role: String              // staff| owner | member
 - gymId: String | null
 - isVerified: Boolean
 - createdAt: Timestamp

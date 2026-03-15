@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:saas/qr_scan.dart';
+import 'package:saas/staff/gym_staff.dart';
 import 'register.dart';
 
 import '../owner/gym_owner.dart';
@@ -117,6 +118,13 @@ class _LoginState extends State<Login> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const GymOwner()),
+        (route) => false,
+      );
+    }
+    else if (role == 'staff') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const GymStaff()),
         (route) => false,
       );
     }
