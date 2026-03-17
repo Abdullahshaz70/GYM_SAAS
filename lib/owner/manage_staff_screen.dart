@@ -29,38 +29,78 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
   }
 
   Future<void> _loadStaff() async {
-    setState(() => _isLoading = true);
-    try {
-      // Get all users in this gym with role = staff
-      final staffSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .where('gymId', isEqualTo: widget.gymId)
-          .where('role', isEqualTo: 'staff')
+  setState(() => _isLoading = true);
+  try {
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. Get staff from users collection (independent query)
+    final staffSnap = await firestore
+        .collection('users')
+        .where('gymId', isEqualTo: widget.gymId)
+        .where('role', isEqualTo: 'staff')
+        .get();
+
+    final staff = <Map<String, dynamic>>[];
+    for (final doc in staffSnap.docs) {
+      final memberDoc = await firestore
+          .collection('gyms')
+          .doc(widget.gymId)
+          .collection('members')
+          .doc(doc.id)
           .get();
 
-      final staffUids =
-          staffSnap.docs.map((d) => d.id).toSet();
-
-      final staff = <Map<String, dynamic>>[];
-      final regular = <Map<String, dynamic>>[];
-
-      for (final m in widget.allMembers) {
-        if (staffUids.contains(m['uid'])) {
-          staff.add(m);
-        } else {
-          regular.add(m);
-        }
-      }
-
-      setState(() {
-        _staffMembers = staff;
-        _regularMembers = regular;
-        _isLoading = false;
+      staff.add({
+        'uid': doc.id,
+        'name': doc.data()['name'] ?? 'Unknown',
+        'plan': memberDoc.data()?['plan'] ?? 'Member',
+        'feeStatus': memberDoc.data()?['feeStatus'] ?? 'unpaid',
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
     }
+
+    // 2. Regular members = allMembers (already filtered — no staff here)
+    setState(() {
+      _staffMembers = staff;
+      _regularMembers = List.from(widget.allMembers); // already clean
+      _isLoading = false;
+    });
+  } catch (e) {
+    setState(() => _isLoading = false);
   }
+}
+
+  // Future<void> _loadStaff() async {
+  //   setState(() => _isLoading = true);
+  //   try {
+  //     // Get all users in this gym with role = staff
+  //     final staffSnap = await FirebaseFirestore.instance
+  //         .collection('users')
+  //         .where('gymId', isEqualTo: widget.gymId)
+  //         .where('role', isEqualTo: 'staff')
+  //         .get();
+
+  //     final staffUids =
+  //         staffSnap.docs.map((d) => d.id).toSet();
+
+  //     final staff = <Map<String, dynamic>>[];
+  //     final regular = <Map<String, dynamic>>[];
+
+  //     for (final m in widget.allMembers) {
+  //       if (staffUids.contains(m['uid'])) {
+  //         staff.add(m);
+  //       } else {
+  //         regular.add(m);
+  //       }
+  //     }
+
+  //     setState(() {
+  //       _staffMembers = staff;
+  //       _regularMembers = regular;
+  //       _isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //   }
+  // }
 
   Future<void> _promoteToStaff(Map<String, dynamic> member) async {
     final confirmed = await _confirmDialog(

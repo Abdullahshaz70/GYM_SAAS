@@ -114,8 +114,13 @@ class _GymOwnerState extends State<GymOwner> {
       for (var doc in membersSnapshot.docs) {
         final uid = doc.id;
         final data = doc.data();
-        final userDoc =
-            await firestore.collection('users').doc(uid).get();
+        
+
+          final userDoc = await firestore.collection('users').doc(uid).get();
+          final role = userDoc.data()?['role'] ?? 'member';
+
+
+          if (role == 'staff') continue;
 
         members.add({
           'uid': uid,
@@ -386,8 +391,7 @@ class _GymOwnerState extends State<GymOwner> {
   color: Colors.yellowAccent,
   backgroundColor: Colors.grey[900],
   child: SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(), // ← required so pull works even when content is short
-    // padding: const EdgeInsets.all(20),
+    physics: const AlwaysScrollableScrollPhysics(), 
 
 
   
