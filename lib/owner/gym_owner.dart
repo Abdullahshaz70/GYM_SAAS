@@ -8,6 +8,7 @@ import '../auth/login.dart';
 import 'member_detail.dart';
 import 'manage_staff_screen.dart'; 
 import '../user/screens/skeleton_loaders.dart'; 
+import 'owner_payouts_screen.dart';
 
 class GymOwner extends StatefulWidget {
   const GymOwner({super.key});
@@ -360,6 +361,19 @@ class _GymOwnerState extends State<GymOwner> {
             icon: const Icon(Icons.badge_rounded,
                 color: Colors.blueAccent, size: 26),
           ),
+
+          IconButton(
+            tooltip: "Payouts",
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => OwnerPayoutsScreen(gymId: gymId!),
+              ),
+            ),
+            icon: const Icon(Icons.account_balance_wallet_rounded,
+                color: Colors.greenAccent, size: 26),
+          ),
+
           IconButton(
             onPressed: () => _showRegistrationQR(context),
             icon: const Icon(Icons.qr_code_2,
@@ -553,101 +567,107 @@ class _GymOwnerState extends State<GymOwner> {
     );
   }
 
-  Widget _buildMemberTile({required Map<String, dynamic> member}) {
-    bool isPaid =
-        member['feeStatus']?.toString().toLowerCase() == "paid";
+Widget _buildMemberTile({required Map<String, dynamic> member}) {
+  String status = member['feeStatus']?.toString().toLowerCase() ?? 'unpaid';
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MemberDetailScreen(
-              uid: member['uid'] ?? '',
-              gymId: gymId!,
+  bool isPaid = status == 'paid';
+  bool isPending = status == 'pending';
+
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MemberDetailScreen(
+            uid: member['uid'] ?? '',
+            gymId: gymId!,
+          ),
+        ),
+      );
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12, left: 2, right: 2),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Row(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isPaid
+                        ? Colors.greenAccent
+                        : isPending
+                            ? Colors.orangeAccent
+                            : Colors.redAccent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              CircleAvatar(
+                radius: 21,
+                backgroundColor: Colors.yellowAccent.withOpacity(0.1),
+                child: Text(
+                  (member['name'] ?? "G")[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.yellowAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Text(
+              member['name'] ?? "New Member",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12, left: 2, right: 2),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(16),
-          border:
-              Border.all(color: Colors.white.withOpacity(0.05)),
-        ),
-        child: Row(
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isPaid
-                          ? Colors.greenAccent
-                          : Colors.redAccent,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                CircleAvatar(
-                  radius: 21,
-                  backgroundColor:
-                      Colors.yellowAccent.withOpacity(0.1),
-                  child: Text(
-                    (member['name'] ?? "G")[0].toUpperCase(),
-                    style: const TextStyle(
-                        color: Colors.yellowAccent,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: isPaid
+                  ? Colors.greenAccent.withOpacity(0.1)
+                  : isPending
+                      ? Colors.orangeAccent.withOpacity(0.1)
+                      : Colors.redAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Text(
-                member['name'] ?? "New Member",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
+            child: Text(
+              status.toUpperCase(),
+              style: TextStyle(
                 color: isPaid
-                    ? Colors.greenAccent.withOpacity(0.1)
-                    : Colors.redAccent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                (member['feeStatus'] ?? "unpaid").toUpperCase(),
-                style: TextStyle(
-                  color: isPaid
-                      ? Colors.greenAccent
-                      : Colors.redAccent,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
-                ),
+                    ? Colors.greenAccent
+                    : isPending
+                        ? Colors.orangeAccent
+                        : Colors.redAccent,
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
-
+    ),
+  );
+}
   void _showRegistrationQR(BuildContext context) {
     showModalBottomSheet(
       context: context,
