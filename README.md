@@ -100,6 +100,13 @@ member(sub collection)
 - createdAt: Timestamp
 
 
+gyms/{gymId}/payouts/{payoutId}
+- amount: Number
+- status: String         // pending | completed
+- requestedAt: Timestamp
+- completedAt: Timestamp | null
+- coveredPaymentIds: List<String>   // payment doc IDs included in this payout
+- gymId: String
 
 
 
