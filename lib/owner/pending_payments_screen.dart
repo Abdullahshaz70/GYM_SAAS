@@ -129,70 +129,83 @@ class _PendingPaymentsScreenState extends State<PendingPaymentsScreen> {
     }
   }
 
-  Future<void> _reject(Map<String, dynamic> payment) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Reject Payment?",
-            style: TextStyle(color: Colors.white)),
-        content: Text(
-          "Reject payment from ${payment['memberName']}?\nMember will remain unpaid.",
-          style: const TextStyle(color: Colors.white54, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child:
-                const Text("CANCEL", style: TextStyle(color: Colors.white38)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8))),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("REJECT",
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
+ Future<void> _reject(Map<String, dynamic> payment) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text("Reject Payment?",
+          style: TextStyle(color: Colors.white)),
+      content: Text(
+        "Reject payment from ${payment['memberName']}?\nMember will be marked as unpaid.",
+        style: const TextStyle(color: Colors.white54, fontSize: 13),
       ),
-    );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("CANCEL", style: TextStyle(color: Colors.white38)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8))),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("REJECT",
+              style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ],
+    ),
+  );
 
-    if (confirmed != true) return;
+  if (confirmed != true) return;
 
-    try {
-      await FirebaseFirestore.instance
+  try {
+    final firestore = FirebaseFirestore.instance;
+
+    await Future.wait([
+      // Mark the payment as rejected
+      firestore
           .collection('gyms')
           .doc(widget.gymId)
           .collection('payments')
           .doc(payment['paymentId'])
           .update({
-        'status': 'failed',
+        'status': 'rejected',
         'updatedAt': Timestamp.now(),
-      });
+      }),
+      // Reset member fee status back to unpaid
+      firestore
+          .collection('gyms')
+          .doc(widget.gymId)
+          .collection('members')
+          .doc(payment['memberUid'])
+          .update({
+        'feeStatus': 'unpaid',
+      }),
+    ]);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("❌ Payment rejected."),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-      await _fetchPending();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Error: $e"),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Payment rejected — member marked unpaid."),
+        backgroundColor: Colors.orangeAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+
+    await _fetchPending();
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Error: $e"),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
-
+}
   void _viewScreenshot(String url) {
     showDialog(
       context: context,
