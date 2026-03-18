@@ -3,12 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
+import 'pending_payments_screen.dart';
 
 import '../auth/login.dart';
 import 'member_detail.dart';
-import 'manage_staff_screen.dart'; 
-import '../user/screens/skeleton_loaders.dart'; 
-import 'owner_payouts_screen.dart';
+import 'manage_staff_screen.dart';
+import '../user/screens/skeleton_loaders.dart';
 
 class GymOwner extends StatefulWidget {
   const GymOwner({super.key});
@@ -23,6 +23,10 @@ class _GymOwnerState extends State<GymOwner> {
   bool _isLoggingOut = false;
 
   double totalRevenue = 0;
+  double cashRevenue = 0;
+  double onlineRevenue = 0;
+  int pendingOnlineCount = 0;
+
   int totalMembers = 0;
   String? gymId;
   bool loadingStats = true;
@@ -36,18 +40,19 @@ class _GymOwnerState extends State<GymOwner> {
 
   int todayAttendanceCount = 0;
 
-  Future<void> fetchGymStats() async {
-    if (!loadingStats) {
-    setState(() => loadingMembers = true);
-  }
-  final uid = FirebaseAuth.instance.currentUser!.uid;
+Future<void> fetchGymStats() async {
+    if (!loadingStats) setState(() => loadingMembers = true);
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
     final firestore = FirebaseFirestore.instance;
+
 
     final gymQuery = await firestore
         .collection('gyms')
         .where('ownerUid', isEqualTo: uid)
         .limit(1)
         .get();
+
 
     if (gymQuery.docs.isEmpty) {
       setState(() => loadingStats = false);
@@ -56,47 +61,80 @@ class _GymOwnerState extends State<GymOwner> {
 
     gymId = gymQuery.docs.first.id;
 
-    final membersSnapshot = await firestore
-        .collection('gyms')
-        .doc(gymId)
-        .collection('members')
-        .get();
-
+    // Attendance
     final today = DateTime.now();
     final todayKey =
         "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-
     final attendanceSnapshot = await firestore
         .collection('gyms')
         .doc(gymId)
         .collection('attendance')
         .where('date', isEqualTo: todayKey)
         .get();
-
     todayAttendanceCount = attendanceSnapshot.size;
 
+    // All payments → revenue breakdown
     final paymentsSnapshot = await firestore
         .collection('gyms')
         .doc(gymId)
         .collection('payments')
         .get();
 
+    gymId = gymQuery.docs.first.id;
+    print('DEBUG gymId: $gymId');
+    print('DEBUG payments count: ${paymentsSnapshot.docs.length}');
+    
+
     double revenue = 0;
-    for (var doc in paymentsSnapshot.docs) {
-      revenue += (doc['amount'] as num).toDouble();
+    double cashRev = 0;
+    double onlineRev = 0;
+    int pendingCount = 0;
+
+    for (final doc in paymentsSnapshot.docs) {
+      final data = doc.data();
+      final amount = (data['amount'] as num).toDouble();
+      final method = (data['method'] ?? '').toString().toLowerCase();
+      final status = (data['status'] ?? '').toString().toLowerCase();
+
+      // Count pending online payments (awaiting owner approval)
+      if (status == 'pending' &&
+          (method == 'easypaisa' || method == 'jazzcash')) {
+        pendingCount++;
+      }
+
+      // Only count completed payments in revenue
+      if (status == 'completed' || status == '') {
+        revenue += amount;
+        if (method == 'easypaisa' || method == 'jazzcash') {
+          onlineRev += amount;
+        } else {
+          cashRev += amount;
+        }
+      }
     }
 
+    print('DEBUG revenue: $revenue, cash: $cashRev, online: $onlineRev');
+
     setState(() {
-      totalMembers = membersSnapshot.size;
       totalRevenue = revenue;
+      cashRevenue = cashRev;
+      onlineRevenue = onlineRev;
+      pendingOnlineCount = pendingCount;
       loadingStats = false;
       name = gymQuery.docs.first['gymName'] ?? 'Owner';
       gymCode = gymQuery.docs.first['registrationCode'] ?? '';
     });
 
+    // Fetch members count
+    final membersSnapshot = await firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('members')
+        .get();
+    setState(() => totalMembers = membersSnapshot.size);
+
     await fetchMembers();
   }
-
   Future<void> fetchMembers() async {
     if (gymId == null) return;
 
@@ -115,13 +153,11 @@ class _GymOwnerState extends State<GymOwner> {
       for (var doc in membersSnapshot.docs) {
         final uid = doc.id;
         final data = doc.data();
-        
 
-          final userDoc = await firestore.collection('users').doc(uid).get();
-          final role = userDoc.data()?['role'] ?? 'member';
+        final userDoc = await firestore.collection('users').doc(uid).get();
+        final role = userDoc.data()?['role'] ?? 'member';
 
-
-          if (role == 'staff') continue;
+        if (role == 'staff') continue;
 
         members.add({
           'uid': uid,
@@ -167,23 +203,19 @@ class _GymOwnerState extends State<GymOwner> {
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Center(
-                  child: CircularProgressIndicator(
-                      color: Colors.yellowAccent));
+                  child: CircularProgressIndicator(color: Colors.yellowAccent));
             }
 
-            final data =
-                snapshot.data!.data() as Map<String, dynamic>;
-            final token =
-                data['currentAttendanceQrToken'] ?? 'no-token';
-            final qrData = "$token";
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final token = data['currentAttendanceQrToken'] ?? 'no-token';
 
             return Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 30, vertical: 20),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A1A),
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(35)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(35)),
                 border: Border.all(color: Colors.white10),
               ),
               child: Column(
@@ -210,8 +242,7 @@ class _GymOwnerState extends State<GymOwner> {
                   const SizedBox(height: 8),
                   const Text(
                     "Scan the QR code to mark your attendance",
-                    style:
-                        TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                   const SizedBox(height: 30),
                   Container(
@@ -228,7 +259,7 @@ class _GymOwnerState extends State<GymOwner> {
                     ),
                     padding: const EdgeInsets.all(20),
                     child: QrImageView(
-                      data: qrData,
+                      data: token,
                       version: QrVersions.auto,
                       size: 240,
                       eyeStyle: const QrEyeStyle(
@@ -260,7 +291,7 @@ class _GymOwnerState extends State<GymOwner> {
                         ),
                         const SizedBox(height: 4),
                         SelectableText(
-                          qrData,
+                          token,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.yellowAccent,
@@ -310,14 +341,12 @@ class _GymOwnerState extends State<GymOwner> {
 
   @override
   Widget build(BuildContext context) {
-
     if (loadingStats) {
       return Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(
           backgroundColor: Colors.black,
           elevation: 0,
-          // Skeleton appbar title
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -346,7 +375,6 @@ class _GymOwnerState extends State<GymOwner> {
           ),
         ),
         actions: [
-          // ── Manage Staff button ───────────────────────────
           IconButton(
             tooltip: "Manage Staff",
             onPressed: () => Navigator.push(
@@ -361,19 +389,6 @@ class _GymOwnerState extends State<GymOwner> {
             icon: const Icon(Icons.badge_rounded,
                 color: Colors.blueAccent, size: 26),
           ),
-
-          IconButton(
-            tooltip: "Payouts",
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => OwnerPayoutsScreen(gymId: gymId!),
-              ),
-            ),
-            icon: const Icon(Icons.account_balance_wallet_rounded,
-                color: Colors.greenAccent, size: 26),
-          ),
-
           IconButton(
             onPressed: () => _showRegistrationQR(context),
             icon: const Icon(Icons.qr_code_2,
@@ -382,7 +397,7 @@ class _GymOwnerState extends State<GymOwner> {
           IconButton(
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: Colors.redAccent),
-          )
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -399,59 +414,106 @@ class _GymOwnerState extends State<GymOwner> {
       ),
       
       
-      
       body: RefreshIndicator(
-  onRefresh: () async => fetchGymStats(),
-  color: Colors.yellowAccent,
-  backgroundColor: Colors.grey[900],
-  child: SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(), 
-
-
-  
-     child:  SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildAttendanceStatusCard(),
-            const SizedBox(height: 25),
-            Row(
-              children: [
-                _buildStatCard("REVENUE",
-                    "Rs ${totalRevenue.toStringAsFixed(0)}",
-                    Icons.monetization_on, Colors.greenAccent),
-                const SizedBox(width: 15),
-                _buildStatCard("MEMBERS", totalMembers.toString(),
-                    Icons.group, Colors.blueAccent),
-              ],
-            ),
-            const SizedBox(height: 30),
-            _buildSearchSection(),
-            const SizedBox(height: 20),
-
-            // ── INLINE SKELETON while members load ───────────────
-            if (loadingMembers)
-              const MemberListSkeleton() // ← skeleton
-            else if (filteredMembers.isEmpty)
-              const Center(
-                  child: Text("No members found",
-                      style: TextStyle(color: Colors.white38)))
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: filteredMembers.length,
-                itemBuilder: (context, index) {
-                  final member = filteredMembers[index];
-                  return _buildMemberTile(member: member);
-                },
+        onRefresh: () async => fetchGymStats(),
+        color: Colors.yellowAccent,
+        backgroundColor: Colors.grey[900],
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildAttendanceStatusCard(),
+              const SizedBox(height: 25),
+             Row(
+  children: [
+    _buildStatCard(
+      "TOTAL REVENUE",
+      "Rs ${totalRevenue.toStringAsFixed(0)}",
+      Icons.monetization_on_rounded,
+      Colors.greenAccent,
+    ),
+    const SizedBox(width: 15),
+    _buildStatCard(
+      "MEMBERS",
+      totalMembers.toString(),
+      Icons.group_rounded,
+      Colors.blueAccent,
+    ),
+  ],
+),
+const SizedBox(height: 15),
+Row(
+  children: [
+    _buildStatCard(
+      "ONLINE REVENUE",
+      "Rs ${onlineRevenue.toStringAsFixed(0)}",
+      Icons.account_balance_wallet_rounded,
+      Colors.purpleAccent,
+    ),
+    const SizedBox(width: 15),
+    _buildStatCard(
+      "CASH REVENUE",
+      "Rs ${cashRevenue.toStringAsFixed(0)}",
+      Icons.payments_rounded,
+      Colors.tealAccent,
+    ),
+  ],
+),
+             
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  const SizedBox(width: 15),
+                  GestureDetector(
+                        onTap: pendingOnlineCount > 0
+                            ? () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        PendingPaymentsScreen(gymId: gymId!),
+                                  ),
+                                ).then((_) => fetchGymStats())
+                            : null,
+                        child: _buildStatCard(
+                          "PENDING ONLINE",
+                          pendingOnlineCount > 0
+                              ? "$pendingOnlineCount payment${pendingOnlineCount > 1 ? 's' : ''}"
+                              : "None",
+                          Icons.hourglass_top_rounded,
+                          pendingOnlineCount > 0 ? Colors.orangeAccent : Colors.white38,
+                        ),
+                      ),
+                ],
               ),
-          ],
+              const SizedBox(height: 30),
+              _buildSearchSection(),
+              const SizedBox(height: 20),
+              if (loadingMembers)
+                const MemberListSkeleton()
+              else if (filteredMembers.isEmpty)
+                const Center(
+                    child: Text("No members found",
+                        style: TextStyle(color: Colors.white38)))
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredMembers.length,
+                  itemBuilder: (context, index) {
+                    final member = filteredMembers[index];
+                    return _buildMemberTile(member: member);
+                  },
+                ),
+
+
+                SizedBox(height: 50,)
+
+            ],
+          ),
         ),
       ),
-  )
-    )
     );
   }
 
@@ -491,8 +553,7 @@ class _GymOwnerState extends State<GymOwner> {
               color: Colors.black.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.how_to_reg,
-                color: Colors.black, size: 30),
+            child: const Icon(Icons.how_to_reg, color: Colors.black, size: 30),
           )
         ],
       ),
@@ -519,8 +580,7 @@ class _GymOwnerState extends State<GymOwner> {
           decoration: InputDecoration(
             hintText: "Search member name or ID...",
             hintStyle: const TextStyle(color: Colors.white38),
-            prefixIcon:
-                const Icon(Icons.search, color: Colors.yellowAccent),
+            prefixIcon: const Icon(Icons.search, color: Colors.yellowAccent),
             filled: true,
             fillColor: Colors.white.withOpacity(0.05),
             enabledBorder: OutlineInputBorder(
@@ -529,8 +589,7 @@ class _GymOwnerState extends State<GymOwner> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Colors.yellowAccent),
+              borderSide: const BorderSide(color: Colors.yellowAccent),
             ),
           ),
         ),
@@ -554,8 +613,7 @@ class _GymOwnerState extends State<GymOwner> {
             Icon(icon, color: color, size: 30),
             const SizedBox(height: 15),
             Text(title,
-                style: const TextStyle(
-                    color: Colors.white60, fontSize: 12)),
+                style: const TextStyle(color: Colors.white60, fontSize: 12)),
             Text(value,
                 style: const TextStyle(
                     color: Colors.white,
@@ -567,107 +625,109 @@ class _GymOwnerState extends State<GymOwner> {
     );
   }
 
-Widget _buildMemberTile({required Map<String, dynamic> member}) {
-  String status = member['feeStatus']?.toString().toLowerCase() ?? 'unpaid';
+  Widget _buildMemberTile({required Map<String, dynamic> member}) {
+    String status = member['feeStatus']?.toString().toLowerCase() ?? 'unpaid';
 
-  bool isPaid = status == 'paid';
-  bool isPending = status == 'pending';
+    bool isPaid = status == 'paid';
+    bool isPending = status == 'pending';
 
-  return GestureDetector(
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => MemberDetailScreen(
-            uid: member['uid'] ?? '',
-            gymId: gymId!,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MemberDetailScreen(
+              uid: member['uid'] ?? '',
+              gymId: gymId!,
+            ),
           ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12, left: 2, right: 2),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
         ),
-      );
-    },
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 12, left: 2, right: 2),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Row(
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isPaid
-                        ? Colors.greenAccent
-                        : isPending
-                            ? Colors.orangeAccent
-                            : Colors.redAccent,
-                    width: 2,
+        child: Row(
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isPaid
+                          ? Colors.greenAccent
+                          : isPending
+                              ? Colors.orangeAccent
+                              : Colors.redAccent,
+                      width: 2,
+                    ),
                   ),
                 ),
-              ),
-              CircleAvatar(
-                radius: 21,
-                backgroundColor: Colors.yellowAccent.withOpacity(0.1),
-                child: Text(
-                  (member['name'] ?? "G")[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.yellowAccent,
-                    fontWeight: FontWeight.bold,
+                CircleAvatar(
+                  radius: 21,
+                  backgroundColor: Colors.yellowAccent.withOpacity(0.1),
+                  child: Text(
+                    (member['name'] ?? "G")[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.yellowAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Text(
-              member['name'] ?? "New Member",
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+              ],
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Text(
+                member['name'] ?? "New Member",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: isPaid
-                  ? Colors.greenAccent.withOpacity(0.1)
-                  : isPending
-                      ? Colors.orangeAccent.withOpacity(0.1)
-                      : Colors.redAccent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              status.toUpperCase(),
-              style: TextStyle(
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
                 color: isPaid
-                    ? Colors.greenAccent
+                    ? Colors.greenAccent.withOpacity(0.1)
                     : isPending
-                        ? Colors.orangeAccent
-                        : Colors.redAccent,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+                        ? Colors.orangeAccent.withOpacity(0.1)
+                        : Colors.redAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  color: isPaid
+                      ? Colors.greenAccent
+                      : isPending
+                          ? Colors.orangeAccent
+                          : Colors.redAccent,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   void _showRegistrationQR(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -681,8 +741,8 @@ Widget _buildMemberTile({required Map<String, dynamic> member}) {
                 const BorderRadius.vertical(top: Radius.circular(30)),
             border: Border.all(color: Colors.white10, width: 1),
           ),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 30, vertical: 20),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -718,8 +778,7 @@ Widget _buildMemberTile({required Map<String, dynamic> member}) {
                 "Let the member scan this to join your gym",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 13),
+                    color: Colors.white.withOpacity(0.4), fontSize: 13),
               ),
               const SizedBox(height: 35),
               Container(
@@ -787,16 +846,14 @@ Widget _buildMemberTile({required Map<String, dynamic> member}) {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.yellowAccent,
                     foregroundColor: Colors.black,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 15),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15)),
                     elevation: 0,
                   ),
                   child: const Text("DONE",
                       style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1)),
+                          fontWeight: FontWeight.bold, letterSpacing: 1)),
                 ),
               ),
               const SizedBox(height: 10),
@@ -819,15 +876,11 @@ Widget _buildMemberTile({required Map<String, dynamic> member}) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Toast widget (unchanged)
-// ─────────────────────────────────────────────────────────────
 class _ToastWidget extends StatefulWidget {
   final String message;
   final VoidCallback onDismissed;
 
-  const _ToastWidget(
-      {required this.message, required this.onDismissed});
+  const _ToastWidget({required this.message, required this.onDismissed});
 
   @override
   State<_ToastWidget> createState() => _ToastWidgetState();
@@ -852,8 +905,8 @@ class _ToastWidgetState extends State<_ToastWidget>
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _controller, curve: Curves.easeOutCubic));
+    ).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _controller.forward();
 
@@ -884,8 +937,8 @@ class _ToastWidgetState extends State<_ToastWidget>
             position: _slideAnimation,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    vertical: 10, horizontal: 24),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.95),
                   borderRadius: BorderRadius.circular(30),
