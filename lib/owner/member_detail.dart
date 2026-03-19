@@ -729,7 +729,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
       await batch.commit();
 
-      // Refresh the screen so header badge + fee list update
+
       await fetchData();
 
       if (mounted) {

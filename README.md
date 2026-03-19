@@ -32,21 +32,24 @@ samples, guidance on mobile development, and a full API reference.
 
 
 gyms/{gymId}
-- gymName: String
-- ownerUid: String
-- location: String
-- defaultFee: Number
-- registrationCode: String
-- plan: String              // Monthly | 6 Months | Yearly
-- status: String            // active | suspended | blocked
-- isSaaSActive: Boolean
+ - gymName: String
+ - ownerUid: String
+ - location: String
+ - defaultFee: Number
+ - registrationCode: String
+ - plan: String // Monthly | 2 Months | 6 Months
+ - status: String // active | suspended | blocked
+ - isSaaSActive: Boolean
+ - createdAt: Timestamp
+depositAccounts (Array of Maps)
+ - accountTitle: String
+ - accountNumber: String
+ - bankName: String // Easypaisa | JazzCash | Meezan | etc
+ - accountType: String // Wallet (EP/JC) | Bank Account
 
-- createdAt: Timestamp
-
-- attendanceQrExpiresAt: TimeStamp
-- attendanceQrLastGeneratedAt: TimeStamp
-- currentAttendanceQrToken: String
-
+ - currentAttendanceQrToken: String
+ - attendanceQrLastGeneratedAt: Timestamp
+ - attendanceQrExpiresAt: Timestamp
 
 
 
@@ -98,21 +101,4 @@ member(sub collection)
 - validUntil: Timestamp | null
 - createdBy: String           // ownerUid
 - createdAt: Timestamp
-
-
-gyms/{gymId}/payouts/{payoutId}
-- amount: Number
-- status: String         // pending | completed
-- requestedAt: Timestamp
-- completedAt: Timestamp | null
-- coveredPaymentIds: List<String>   // payment doc IDs included in this payout
-- gymId: String
-
-
-
-
-
-
-
-
 

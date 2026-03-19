@@ -2,27 +2,59 @@
 // import 'package:cloud_firestore/cloud_firestore.dart';
 // import 'package:firebase_auth/firebase_auth.dart';
 
+// class GymAccount {
+//   String id;
+//   String bankName;
+//   String accountTitle;
+//   String accountNumber;
+//   String accountType;
+
+//   GymAccount({
+//     this.id = '',
+//     this.bankName = '',
+//     this.accountTitle = '',
+//     this.accountNumber = '',
+//     this.accountType = 'Bank Account',
+//   });
+
+//   factory GymAccount.fromMap(Map<String, dynamic> map, String docId) {
+//     return GymAccount(
+//       id: docId,
+//       bankName: map['bankName'] ?? '',
+//       accountTitle: map['accountTitle'] ?? '',
+//       accountNumber: map['accountNumber'] ?? '',
+//       accountType: map['accountType'] ?? 'Bank Account',
+//     );
+//   }
+
+//   Map<String, dynamic> toMap() {
+//     return {
+//       'bankName': bankName,
+//       'accountTitle': accountTitle,
+//       'accountNumber': accountNumber,
+//       'accountType': accountType,
+//       'updatedAt': Timestamp.now(),
+//     };
+//   }
+// }
+
 // class AddEditGymScreen extends StatefulWidget {
-//   final String? gymId; // null = Add, not null = Edit
+//   final String? gymId;
 //   const AddEditGymScreen({super.key, this.gymId});
 
 //   @override
 //   State<AddEditGymScreen> createState() => _AddEditGymScreenState();
 // }
 
-
-
 // class _AddEditGymScreenState extends State<AddEditGymScreen> {
 //   final _formKey = GlobalKey<FormState>();
 
-//   // Gym controllers
 //   final TextEditingController nameController = TextEditingController();
 //   final TextEditingController locationController = TextEditingController();
 //   final TextEditingController feeController = TextEditingController();
 //   final TextEditingController registrationController = TextEditingController();
 //   final TextEditingController planController = TextEditingController();
 
-//   // Owner controllers
 //   final TextEditingController ownerNameController = TextEditingController();
 //   final TextEditingController ownerEmailController = TextEditingController();
 //   final TextEditingController ownerContactController = TextEditingController();
@@ -32,18 +64,16 @@
 //   bool isLoading = false;
 //   String ownerUid = "";
 
-//   // Merchant Credentials
-//   List<MerchantCredential> merchantList = [];
+//   List<GymAccount> accountList = [];
 
 //   @override
 //   void initState() {
 //     super.initState();
 //     if (widget.gymId != null) {
 //       _loadGymData();
-//       _loadMerchantData();
+//       _loadAccountData();
 //     } else {
-//       // Start with one empty merchant slot for new gyms
-//       merchantList.add(MerchantCredential());
+//       accountList.add(GymAccount());
 //     }
 //   }
 
@@ -74,39 +104,32 @@
 //         });
 //       }
 //     }
-
 //     setState(() => isLoading = false);
 //   }
 
-//   Future<void> _loadMerchantData() async {
-//     if (widget.gymId == null) return;
-
+//   Future<void> _loadAccountData() async {
 //     final snapshot = await FirebaseFirestore.instance
 //         .collection('gyms')
 //         .doc(widget.gymId)
-//         .collection('merchantCredentials')
+//         .collection('accounts')
 //         .get();
 
 //     setState(() {
-//       merchantList = snapshot.docs
-//           .map((doc) => MerchantCredential.fromMap(doc.data(), doc.id))
+//       accountList = snapshot.docs
+//           .map((doc) => GymAccount.fromMap(doc.data(), doc.id))
 //           .toList();
-//       if (merchantList.isEmpty) {
-//         merchantList.add(MerchantCredential()); // at least one empty slot
-//       }
+//       if (accountList.isEmpty) accountList.add(GymAccount());
 //     });
 //   }
 
 //   Future<void> _saveGym() async {
 //     if (!_formKey.currentState!.validate()) return;
-
 //     setState(() => isLoading = true);
 
 //     try {
 //       String gymId = widget.gymId ?? '';
 
 //       if (widget.gymId == null) {
-//         // CREATE owner first
 //         final userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
 //           email: ownerEmailController.text.trim(),
 //           password: ownerPasswordController.text.trim(),
@@ -140,12 +163,8 @@
 //         });
 
 //         gymId = gymRef.id;
-
-//         await FirebaseFirestore.instance.collection('users').doc(ownerUid).update({
-//           'gymId': gymId,
-//         });
+//         await FirebaseFirestore.instance.collection('users').doc(ownerUid).update({'gymId': gymId});
 //       } else {
-//         // UPDATE existing gym
 //         await FirebaseFirestore.instance.collection('gyms').doc(gymId).update({
 //           'gymName': nameController.text.trim(),
 //           'location': locationController.text.trim(),
@@ -164,36 +183,13 @@
 //         }
 //       }
 
-//       // SAVE Merchant Credentials
-//       final merchantCol = FirebaseFirestore.instance
-//           .collection('gyms')
-//           .doc(gymId)
-//           .collection('merchantCredentials');
-
-//       for (var merchant in merchantList) {
-//         if (merchant.gateway.isEmpty) continue;
-
-//         if (merchant.id.isEmpty) {
-//           // new
-//           await merchantCol.add({
-//             'gateway': merchant.gateway,
-//             'storeId': merchant.storeId,
-//             'hashKey': merchant.hashKey,
-//             'accountNumber': merchant.accountNumber,
-//             'environment': merchant.environment,
-//             'createdAt': Timestamp.now(),
-//             'updatedAt': Timestamp.now(),
-//           });
+//       final accountCol = FirebaseFirestore.instance.collection('gyms').doc(gymId).collection('accounts');
+//       for (var acc in accountList) {
+//         if (acc.bankName.isEmpty || acc.accountNumber.isEmpty) continue;
+//         if (acc.id.isEmpty) {
+//           await accountCol.add(acc.toMap());
 //         } else {
-//           // update
-//           await merchantCol.doc(merchant.id).update({
-//             'gateway': merchant.gateway,
-//             'storeId': merchant.storeId,
-//             'hashKey': merchant.hashKey,
-//             'accountNumber': merchant.accountNumber,
-//             'environment': merchant.environment,
-//             'updatedAt': Timestamp.now(),
-//           });
+//           await accountCol.doc(acc.id).update(acc.toMap());
 //         }
 //       }
 
@@ -204,89 +200,59 @@
 //     }
 //   }
 
-//   Widget _buildMerchantForm() {
+//   Widget _buildAccountForm() {
 //     return Column(
 //       children: [
-//         ...merchantList.asMap().entries.map((entry) {
+//         ...accountList.asMap().entries.map((entry) {
 //           final index = entry.key;
-//           final merchant = entry.value;
+//           final account = entry.value;
 
 //           return Card(
-//             color: Colors.white10,
+//             color: Colors.white.withOpacity(0.05),
 //             margin: const EdgeInsets.only(top: 10),
+//             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
 //             child: Padding(
 //               padding: const EdgeInsets.all(12),
 //               child: Column(
 //                 children: [
 //                   Row(
+//                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
 //                     children: [
-//                       Expanded(child: Text("Merchant ${index + 1}", style: const TextStyle(color: Colors.white))),
+//                       Text("Account #${index + 1}", 
+//                         style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold)),
 //                       IconButton(
-//                         icon: const Icon(Icons.delete, color: Colors.redAccent),
-//                        onPressed: () async {
-//   final merchantId = merchant.id;
-
-//   // 1. If it exists in Firestore, delete it there first
-//   if (widget.gymId != null && merchantId.isNotEmpty) {
-//     bool confirm = await _showDeleteConfirmation();
-//     if (!confirm) return;
-
-//     setState(() => isLoading = true);
-//     try {
-//       await FirebaseFirestore.instance
-//           .collection('gyms')
-//           .doc(widget.gymId)
-//           .collection('merchantCredentials')
-//           .doc(merchantId)
-//           .delete();
-      
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(content: Text("Merchant deleted from database"))
-//       );
-//     } catch (e) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text("Error deleting: $e"))
-//       );
-//     } finally {
-//       setState(() => isLoading = false);
-//     }
-//   }
-
-//   // 2. Remove from the local UI list
-//   setState(() => merchantList.removeAt(index));
-// },
-//                       )
+//                         icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+//                         onPressed: () => _deleteAccount(index, account),
+//                       ),
+//                     ],
+//                   ),
+//                   Row(
+//                     children: [
+//                       _typeChip("Bank Account", account),
+//                       const SizedBox(width: 10),
+//                       _typeChip("Wallet (EP/JC)", account),
 //                     ],
 //                   ),
 //                   TextFormField(
-//                     initialValue: merchant.gateway,
+//                     initialValue: account.bankName,
 //                     style: const TextStyle(color: Colors.white),
-//                     decoration: _fieldStyle("Gateway (e.g., easypaisa)", Icons.payment),
-//                     onChanged: (val) => merchant.gateway = val,
+//                     decoration: _fieldStyle("Bank Name (e.g. Meezan, Easypaisa)", Icons.account_balance),
+//                     onChanged: (val) => account.bankName = val,
 //                   ),
 //                   TextFormField(
-//                     initialValue: merchant.storeId,
+//                     initialValue: account.accountTitle,
 //                     style: const TextStyle(color: Colors.white),
-//                     decoration: _fieldStyle("Store ID", Icons.store),
-//                     onChanged: (val) => merchant.storeId = val,
+//                     decoration: _fieldStyle("Account Title", Icons.person_pin),
+//                     onChanged: (val) => account.accountTitle = val,
 //                   ),
 //                   TextFormField(
-//                     initialValue: merchant.hashKey,
+//                     initialValue: account.accountNumber,
 //                     style: const TextStyle(color: Colors.white),
-//                     decoration: _fieldStyle("Hash Key (Encrypted)", Icons.lock),
-//                     onChanged: (val) => merchant.hashKey = val,
-//                   ),
-//                   TextFormField(
-//                     initialValue: merchant.accountNumber,
-//                     style: const TextStyle(color: Colors.white),
-//                     decoration: _fieldStyle("Account Number", Icons.account_balance),
-//                     onChanged: (val) => merchant.accountNumber = val,
-//                   ),
-//                   TextFormField(
-//                     initialValue: merchant.environment,
-//                     style: const TextStyle(color: Colors.white),
-//                     decoration: _fieldStyle("Environment (sandbox|production)", Icons.cloud),
-//                     onChanged: (val) => merchant.environment = val,
+//                     decoration: _fieldStyle(
+//                       account.accountType == "Bank Account" ? "IBAN / Account Number" : "Mobile Number", 
+//                       Icons.numbers
+//                     ),
+//                     onChanged: (val) => account.accountNumber = val,
 //                   ),
 //                 ],
 //               ),
@@ -295,17 +261,56 @@
 //         }).toList(),
 //         const SizedBox(height: 10),
 //         ElevatedButton.icon(
-//           onPressed: () {
-//             setState(() => merchantList.add(MerchantCredential()));
-//           },
+//           onPressed: () => setState(() => accountList.add(GymAccount())),
 //           icon: const Icon(Icons.add),
-//           label: const Text("Add Merchant"),
+//           label: const Text("Add Account"),
 //           style: ElevatedButton.styleFrom(backgroundColor: Colors.yellowAccent, foregroundColor: Colors.black),
 //         ),
 //       ],
 //     );
 //   }
 
+//   Widget _typeChip(String label, GymAccount account) {
+//     bool isSelected = account.accountType == label;
+//     return ChoiceChip(
+//       label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white)),
+//       selected: isSelected,
+//       onSelected: (val) => setState(() => account.accountType = label),
+//       selectedColor: Colors.yellowAccent,
+//       backgroundColor: Colors.white10,
+//     );
+//   }
+
+//   Future<void> _deleteAccount(int index, GymAccount account) async {
+//     if (widget.gymId != null && account.id.isNotEmpty) {
+//       bool confirm = await _showDeleteConfirmation();
+//       if (!confirm) return;
+//       setState(() => isLoading = true);
+//       await FirebaseFirestore.instance
+//           .collection('gyms')
+//           .doc(widget.gymId)
+//           .collection('accounts')
+//           .doc(account.id)
+//           .delete();
+//       setState(() => isLoading = false);
+//     }
+//     setState(() => accountList.removeAt(index));
+//   }
+
+//   Future<bool> _showDeleteConfirmation() async {
+//     return await showDialog(
+//       context: context,
+//       builder: (ctx) => AlertDialog(
+//         backgroundColor: const Color(0xFF121212),
+//         title: const Text("Delete Account?", style: TextStyle(color: Colors.white)),
+//         content: const Text("This remove this account from payment options.", style: TextStyle(color: Colors.white70)),
+//         actions: [
+//           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCEL")),
+//           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))),
+//         ],
+//       ),
+//     ) ?? false;
+//   }
 
 //   InputDecoration _fieldStyle(String label, IconData icon) {
 //     return InputDecoration(
@@ -317,28 +322,28 @@
 //     );
 //   }
 
-
-// Future<bool> _showDeleteConfirmation() async {
-//   return await showDialog(
-//     context: context,
-//     builder: (ctx) => AlertDialog(
-//       backgroundColor: const Color(0xFF121212),
-//       title: const Text("Delete Merchant?", style: TextStyle(color: Colors.white)),
-//       content: const Text("This will permanently remove these credentials.",
-//           style: TextStyle(color: Colors.white70)),
-//       actions: [
-//         TextButton(
-//           onPressed: () => Navigator.pop(ctx, false),
-//           child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
-//         ),
-//         TextButton(
-//           onPressed: () => Navigator.pop(ctx, true),
-//           child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
-//         ),
+//   Widget _buildSectionHeader(String title, IconData icon) {
+//     return Row(
+//       children: [
+//         Icon(icon, color: Colors.white24, size: 18),
+//         const SizedBox(width: 8),
+//         Text(title, style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
 //       ],
-//     ),
-//   ) ?? false;
-// }
+//     );
+//   }
+
+//   Widget _buildFormCard(List<Widget> children) {
+//     return Container(
+//       margin: const EdgeInsets.only(top: 15),
+//       padding: const EdgeInsets.all(16),
+//       decoration: BoxDecoration(
+//         color: Colors.white.withOpacity(0.05),
+//         borderRadius: BorderRadius.circular(20),
+//         border: Border.all(color: Colors.white.withOpacity(0.05)),
+//       ),
+//       child: Column(children: children),
+//     );
+//   }
 
 //   @override
 //   Widget build(BuildContext context) {
@@ -363,7 +368,7 @@
 //                       TextFormField(controller: locationController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Location", Icons.location_on)),
 //                       TextFormField(controller: feeController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Monthly Fee", Icons.payments), keyboardType: TextInputType.number),
 //                       TextFormField(controller: registrationController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Registration Code", Icons.qr_code)),
-//                       TextFormField(controller: planController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Plan (Monthly|6 Months|Yearly)", Icons.calendar_month)),
+//                       TextFormField(controller: planController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Plan", Icons.calendar_month)),
 //                       const SizedBox(height: 10),
 //                       SwitchListTile(
 //                         title: const Text("SaaS Platform Access", style: TextStyle(color: Colors.white, fontSize: 14)),
@@ -382,8 +387,8 @@
 //                         TextFormField(controller: ownerPasswordController, obscureText: true, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Temporary Password", Icons.lock)),
 //                     ]),
 //                     const SizedBox(height: 30),
-//                     _buildSectionHeader("MERCHANT CREDENTIALS", Icons.credit_card),
-//                     _buildMerchantForm(),
+//                     _buildSectionHeader("DEPOSIT ACCOUNTS", Icons.account_balance_wallet),
+//                     _buildAccountForm(),
 //                     const SizedBox(height: 40),
 //                     SizedBox(
 //                       width: double.infinity,
@@ -405,63 +410,8 @@
 //             ),
 //     );
 //   }
-
-
-//   Widget _buildSectionHeader(String title, IconData icon) {
-//     return Row(
-//       children: [
-//         Icon(icon, color: Colors.white24, size: 18),
-//         const SizedBox(width: 8),
-//         Text(title, style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-//       ],
-//     );
-//   }
-
-
-//     Widget _buildFormCard(List<Widget> children) {
-//     return Container(
-//       margin: const EdgeInsets.only(top: 15),
-//       padding: const EdgeInsets.all(16),
-//       decoration: BoxDecoration(
-//         color: Colors.white.withOpacity(0.05),
-//         borderRadius: BorderRadius.circular(20),
-//         border: Border.all(color: Colors.white.withOpacity(0.05)),
-//       ),
-//       child: Column(children: children),
-//     );
-//   }
-
-
 // }
 
-// class MerchantCredential {
-//   String id;
-//   String gateway;
-//   String storeId;
-//   String hashKey;
-//   String accountNumber;
-//   String environment;
-
-//   MerchantCredential({
-//     this.id = '',
-//     this.gateway = '',
-//     this.storeId = '',
-//     this.hashKey = '',
-//     this.accountNumber = '',
-//     this.environment = 'sandbox',
-//   });
-
-//   factory MerchantCredential.fromMap(Map<String, dynamic> map, String docId) {
-//     return MerchantCredential(
-//       id: docId,
-//       gateway: map['gateway'] ?? '',
-//       storeId: map['storeId'] ?? '',
-//       hashKey: map['hashKey'] ?? '',
-//       accountNumber: map['accountNumber'] ?? '',
-//       environment: map['environment'] ?? 'sandbox',
-//     );
-//   }
-// }
 
 
 
@@ -472,27 +422,55 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+class GymAccount {
+  String bankName;
+  String accountTitle;
+  String accountNumber;
+  String accountType;
+
+  GymAccount({
+    this.bankName = '',
+    this.accountTitle = '',
+    this.accountNumber = '',
+    this.accountType = 'Bank Account',
+  });
+
+  factory GymAccount.fromMap(Map<String, dynamic> map) {
+    return GymAccount(
+      bankName: map['bankName'] ?? '',
+      accountTitle: map['accountTitle'] ?? '',
+      accountNumber: map['accountNumber'] ?? '',
+      accountType: map['accountType'] ?? 'Bank Account',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'bankName': bankName,
+      'accountTitle': accountTitle,
+      'accountNumber': accountNumber,
+      'accountType': accountType,
+    };
+  }
+}
+
 class AddEditGymScreen extends StatefulWidget {
-  final String? gymId; // null = Add, not null = Edit
+  final String? gymId;
   const AddEditGymScreen({super.key, this.gymId});
 
   @override
   State<AddEditGymScreen> createState() => _AddEditGymScreenState();
 }
 
-
-
 class _AddEditGymScreenState extends State<AddEditGymScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Gym controllers
   final TextEditingController nameController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController feeController = TextEditingController();
   final TextEditingController registrationController = TextEditingController();
   final TextEditingController planController = TextEditingController();
 
-  // Owner controllers
   final TextEditingController ownerNameController = TextEditingController();
   final TextEditingController ownerEmailController = TextEditingController();
   final TextEditingController ownerContactController = TextEditingController();
@@ -501,19 +479,15 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
   bool isSaaSActive = true;
   bool isLoading = false;
   String ownerUid = "";
-
-  // Merchant Credentials
-  List<MerchantCredential> merchantList = [];
+  List<GymAccount> accountList = [];
 
   @override
   void initState() {
     super.initState();
     if (widget.gymId != null) {
       _loadGymData();
-      _loadMerchantData();
     } else {
-      // Start with one empty merchant slot for new gyms
-      merchantList.add(MerchantCredential());
+      accountList.add(GymAccount());
     }
   }
 
@@ -531,6 +505,13 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
       planController.text = data['plan'] ?? '';
       isSaaSActive = data['isSaaSActive'] ?? true;
       ownerUid = data['ownerUid'] ?? "";
+      
+      if (data['depositAccounts'] != null) {
+        accountList = (data['depositAccounts'] as List)
+            .map((item) => GymAccount.fromMap(item as Map<String, dynamic>))
+            .toList();
+      }
+      if (accountList.isEmpty) accountList.add(GymAccount());
     });
 
     if (ownerUid.isNotEmpty) {
@@ -544,39 +525,30 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
         });
       }
     }
-
     setState(() => isLoading = false);
-  }
-
-  Future<void> _loadMerchantData() async {
-    if (widget.gymId == null) return;
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('gyms')
-        .doc(widget.gymId)
-        .collection('merchantCredentials')
-        .get();
-
-    setState(() {
-      merchantList = snapshot.docs
-          .map((doc) => MerchantCredential.fromMap(doc.data(), doc.id))
-          .toList();
-      if (merchantList.isEmpty) {
-        merchantList.add(MerchantCredential()); // at least one empty slot
-      }
-    });
   }
 
   Future<void> _saveGym() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => isLoading = true);
 
     try {
-      String gymId = widget.gymId ?? '';
+      List<Map<String, dynamic>> accountsData = accountList
+          .where((acc) => acc.bankName.isNotEmpty && acc.accountNumber.isNotEmpty)
+          .map((acc) => acc.toMap())
+          .toList();
+
+      Map<String, dynamic> gymData = {
+        'gymName': nameController.text.trim(),
+        'location': locationController.text.trim(),
+        'defaultFee': num.tryParse(feeController.text) ?? 0,
+        'registrationCode': registrationController.text.trim(),
+        'plan': planController.text.trim(),
+        'isSaaSActive': isSaaSActive,
+        'depositAccounts': accountsData,
+      };
 
       if (widget.gymId == null) {
-        // CREATE owner first
         final userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: ownerEmailController.text.trim(),
           password: ownerPasswordController.text.trim(),
@@ -595,74 +567,23 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
           'createdAt': Timestamp.now(),
         });
 
-        final gymRef = await FirebaseFirestore.instance.collection('gyms').add({
-          'gymName': nameController.text.trim(),
-          'location': locationController.text.trim(),
-          'defaultFee': num.tryParse(feeController.text) ?? 0,
-          'registrationCode': registrationController.text.isEmpty
-              ? DateTime.now().millisecondsSinceEpoch.toString()
-              : registrationController.text.trim(),
-          'plan': planController.text.trim(),
-          'status': 'active',
-          'isSaaSActive': isSaaSActive,
-          'createdAt': Timestamp.now(),
-          'ownerUid': ownerUid,
-        });
+        gymData['status'] = 'active';
+        gymData['createdAt'] = Timestamp.now();
+        gymData['ownerUid'] = ownerUid;
+        if (registrationController.text.isEmpty) {
+          gymData['registrationCode'] = DateTime.now().millisecondsSinceEpoch.toString();
+        }
 
-        gymId = gymRef.id;
-
-        await FirebaseFirestore.instance.collection('users').doc(ownerUid).update({
-          'gymId': gymId,
-        });
+        final gymRef = await FirebaseFirestore.instance.collection('gyms').add(gymData);
+        await FirebaseFirestore.instance.collection('users').doc(ownerUid).update({'gymId': gymRef.id});
       } else {
-        // UPDATE existing gym
-        await FirebaseFirestore.instance.collection('gyms').doc(gymId).update({
-          'gymName': nameController.text.trim(),
-          'location': locationController.text.trim(),
-          'defaultFee': num.tryParse(feeController.text) ?? 0,
-          'registrationCode': registrationController.text.trim(),
-          'plan': planController.text.trim(),
-          'isSaaSActive': isSaaSActive,
-        });
+        await FirebaseFirestore.instance.collection('gyms').doc(widget.gymId).update(gymData);
 
         if (ownerUid.isNotEmpty) {
           await FirebaseFirestore.instance.collection('users').doc(ownerUid).update({
             'name': ownerNameController.text.trim(),
             'email': ownerEmailController.text.trim(),
             'contactNumber': ownerContactController.text.trim(),
-          });
-        }
-      }
-
-      // SAVE Merchant Credentials
-      final merchantCol = FirebaseFirestore.instance
-          .collection('gyms')
-          .doc(gymId)
-          .collection('merchantCredentials');
-
-      for (var merchant in merchantList) {
-        if (merchant.gateway.isEmpty) continue;
-
-        if (merchant.id.isEmpty) {
-          // new
-          await merchantCol.add({
-            'gateway': merchant.gateway,
-            'storeId': merchant.storeId,
-            'hashKey': merchant.hashKey,
-            'accountNumber': merchant.accountNumber,
-            'environment': merchant.environment,
-            'createdAt': Timestamp.now(),
-            'updatedAt': Timestamp.now(),
-          });
-        } else {
-          // update
-          await merchantCol.doc(merchant.id).update({
-            'gateway': merchant.gateway,
-            'storeId': merchant.storeId,
-            'hashKey': merchant.hashKey,
-            'accountNumber': merchant.accountNumber,
-            'environment': merchant.environment,
-            'updatedAt': Timestamp.now(),
           });
         }
       }
@@ -674,89 +595,59 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
     }
   }
 
-  Widget _buildMerchantForm() {
+  Widget _buildAccountForm() {
     return Column(
       children: [
-        ...merchantList.asMap().entries.map((entry) {
+        ...accountList.asMap().entries.map((entry) {
           final index = entry.key;
-          final merchant = entry.value;
+          final account = entry.value;
 
           return Card(
-            color: Colors.white10,
+            color: Colors.white.withOpacity(0.05),
             margin: const EdgeInsets.only(top: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(child: Text("Merchant ${index + 1}", style: const TextStyle(color: Colors.white))),
+                      Text("Account #${index + 1}", 
+                        style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold)),
                       IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent),
-                       onPressed: () async {
-  final merchantId = merchant.id;
-
-  // 1. If it exists in Firestore, delete it there first
-  if (widget.gymId != null && merchantId.isNotEmpty) {
-    bool confirm = await _showDeleteConfirmation();
-    if (!confirm) return;
-
-    setState(() => isLoading = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('gyms')
-          .doc(widget.gymId)
-          .collection('merchantCredentials')
-          .doc(merchantId)
-          .delete();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Merchant deleted from database"))
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error deleting: $e"))
-      );
-    } finally {
-      setState(() => isLoading = false);
-    }
-  }
-
-  // 2. Remove from the local UI list
-  setState(() => merchantList.removeAt(index));
-},
-                      )
+                        icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                        onPressed: () => setState(() => accountList.removeAt(index)),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      _typeChip("Bank Account", account),
+                      const SizedBox(width: 10),
+                      _typeChip("Wallet (EP/JC)", account),
                     ],
                   ),
                   TextFormField(
-                    initialValue: merchant.gateway,
+                    initialValue: account.bankName,
                     style: const TextStyle(color: Colors.white),
-                    decoration: _fieldStyle("Gateway (e.g., easypaisa)", Icons.payment),
-                    onChanged: (val) => merchant.gateway = val,
+                    decoration: _fieldStyle("Bank Name (e.g. Meezan, Easypaisa)", Icons.account_balance),
+                    onChanged: (val) => account.bankName = val,
                   ),
                   TextFormField(
-                    initialValue: merchant.storeId,
+                    initialValue: account.accountTitle,
                     style: const TextStyle(color: Colors.white),
-                    decoration: _fieldStyle("Store ID", Icons.store),
-                    onChanged: (val) => merchant.storeId = val,
+                    decoration: _fieldStyle("Account Title", Icons.person_pin),
+                    onChanged: (val) => account.accountTitle = val,
                   ),
                   TextFormField(
-                    initialValue: merchant.hashKey,
+                    initialValue: account.accountNumber,
                     style: const TextStyle(color: Colors.white),
-                    decoration: _fieldStyle("Hash Key (Encrypted)", Icons.lock),
-                    onChanged: (val) => merchant.hashKey = val,
-                  ),
-                  TextFormField(
-                    initialValue: merchant.accountNumber,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _fieldStyle("Account Number", Icons.account_balance),
-                    onChanged: (val) => merchant.accountNumber = val,
-                  ),
-                  TextFormField(
-                    initialValue: merchant.environment,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _fieldStyle("Environment (sandbox|production)", Icons.cloud),
-                    onChanged: (val) => merchant.environment = val,
+                    decoration: _fieldStyle(
+                      account.accountType == "Bank Account" ? "IBAN / Account Number" : "Mobile Number", 
+                      Icons.numbers
+                    ),
+                    onChanged: (val) => account.accountNumber = val,
                   ),
                 ],
               ),
@@ -765,17 +656,25 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
         }).toList(),
         const SizedBox(height: 10),
         ElevatedButton.icon(
-          onPressed: () {
-            setState(() => merchantList.add(MerchantCredential()));
-          },
+          onPressed: () => setState(() => accountList.add(GymAccount())),
           icon: const Icon(Icons.add),
-          label: const Text("Add Merchant"),
+          label: const Text("Add Account"),
           style: ElevatedButton.styleFrom(backgroundColor: Colors.yellowAccent, foregroundColor: Colors.black),
         ),
       ],
     );
   }
 
+  Widget _typeChip(String label, GymAccount account) {
+    bool isSelected = account.accountType == label;
+    return ChoiceChip(
+      label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.black : Colors.white)),
+      selected: isSelected,
+      onSelected: (val) => setState(() => account.accountType = label),
+      selectedColor: Colors.yellowAccent,
+      backgroundColor: Colors.white10,
+    );
+  }
 
   InputDecoration _fieldStyle(String label, IconData icon) {
     return InputDecoration(
@@ -787,28 +686,28 @@ class _AddEditGymScreenState extends State<AddEditGymScreen> {
     );
   }
 
-
-Future<bool> _showDeleteConfirmation() async {
-  return await showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF121212),
-      title: const Text("Delete Merchant?", style: TextStyle(color: Colors.white)),
-      content: const Text("This will permanently remove these credentials.",
-          style: TextStyle(color: Colors.white70)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
-        ),
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white24, size: 18),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
       ],
-    ),
-  ) ?? false;
-}
+    );
+  }
+
+  Widget _buildFormCard(List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.only(top: 15),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(children: children),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -833,7 +732,7 @@ Future<bool> _showDeleteConfirmation() async {
                       TextFormField(controller: locationController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Location", Icons.location_on)),
                       TextFormField(controller: feeController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Monthly Fee", Icons.payments), keyboardType: TextInputType.number),
                       TextFormField(controller: registrationController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Registration Code", Icons.qr_code)),
-                      TextFormField(controller: planController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Plan (Monthly|6 Months|Yearly)", Icons.calendar_month)),
+                      TextFormField(controller: planController, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Plan", Icons.calendar_month)),
                       const SizedBox(height: 10),
                       SwitchListTile(
                         title: const Text("SaaS Platform Access", style: TextStyle(color: Colors.white, fontSize: 14)),
@@ -852,8 +751,8 @@ Future<bool> _showDeleteConfirmation() async {
                         TextFormField(controller: ownerPasswordController, obscureText: true, style: const TextStyle(color: Colors.white), decoration: _fieldStyle("Temporary Password", Icons.lock)),
                     ]),
                     const SizedBox(height: 30),
-                    _buildSectionHeader("MERCHANT CREDENTIALS", Icons.credit_card),
-                    _buildMerchantForm(),
+                    _buildSectionHeader("DEPOSIT ACCOUNTS", Icons.account_balance_wallet),
+                    _buildAccountForm(),
                     const SizedBox(height: 40),
                     SizedBox(
                       width: double.infinity,
@@ -875,66 +774,4 @@ Future<bool> _showDeleteConfirmation() async {
             ),
     );
   }
-
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.white24, size: 18),
-        const SizedBox(width: 8),
-        Text(title, style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-      ],
-    );
-  }
-
-
-    Widget _buildFormCard(List<Widget> children) {
-    return Container(
-      margin: const EdgeInsets.only(top: 15),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Column(children: children),
-    );
-  }
-
-
 }
-
-class MerchantCredential {
-  String id;
-  String gateway;
-  String storeId;
-  String hashKey;
-  String accountNumber;
-  String environment;
-
-  MerchantCredential({
-    this.id = '',
-    this.gateway = '',
-    this.storeId = '',
-    this.hashKey = '',
-    this.accountNumber = '',
-    this.environment = 'sandbox',
-  });
-
-  factory MerchantCredential.fromMap(Map<String, dynamic> map, String docId) {
-    return MerchantCredential(
-      id: docId,
-      gateway: map['gateway'] ?? '',
-      storeId: map['storeId'] ?? '',
-      hashKey: map['hashKey'] ?? '',
-      accountNumber: map['accountNumber'] ?? '',
-      environment: map['environment'] ?? 'sandbox',
-    );
-  }
-}
-
-
-
-
-
-

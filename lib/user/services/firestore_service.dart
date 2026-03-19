@@ -97,35 +97,6 @@ class FirestoreService {
     };
   }
 
-  // Future<void> requestPayout({
-  //   required String gymId,
-  //   required double amount,
-  //   required String accountType,
-  //   required String accountNumber,
-  // }) async {
-  //   await _firestore
-  //       .collection('gyms')
-  //       .doc(gymId)
-  //       .collection('payouts')
-  //       .add({
-  //     'amount': amount,
-  //     'accountType': accountType,
-  //     'accountNumber': accountNumber,
-  //     'status': 'pending',
-  //     'requestedAt': FieldValue.serverTimestamp(),
-  //     'processedAt': null,
-  //   });
-  // }
-  // Future<List<Map<String, dynamic>>> getPayouts(String gymId) async {
-  //   final snap = await _firestore
-  //       .collection('gyms')
-  //       .doc(gymId)
-  //       .collection('payouts')
-  //       .orderBy('requestedAt', descending: true)
-  //       .get();
-  //  return snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
-  // }
-
   String generateReferenceCode(String gymId, String memberId) {
   final ts = DateTime.now().millisecondsSinceEpoch.toString().substring(7);
   return 'REF-${gymId.substring(0, 4).toUpperCase()}-$ts';
@@ -142,62 +113,62 @@ class FirestoreService {
       }
   }
 
-Future<Map<String, dynamic>?> getCompanyConfig() async {
-  try {
-    final doc = await _firestore.collection('config').doc('company').get();
-    return doc.exists ? doc.data() : null;
-  } catch (_) {
-    return null;
+  Future<Map<String, dynamic>?> getCompanyConfig() async {
+    try {
+      final doc = await _firestore.collection('config').doc('company').get();
+      return doc.exists ? doc.data() : null;
+    } catch (_) {
+      return null;
+    }
   }
-}
 
-Future<String> createPayment({
-  required String gymId,
-  required String memberId,
-  required double amount,
-  required String plan,
-  required String referenceCode,
-  required String screenshotUrl,
-}) async {
-  final now = DateTime.now();
-  final nowTs = Timestamp.fromDate(now);
+  Future<String> createPayment({
+    required String gymId,
+    required String memberId,
+    required double amount,
+    required String plan,
+    required String referenceCode,
+    required String screenshotUrl,
+  }) async {
+    final now = DateTime.now();
+    final nowTs = Timestamp.fromDate(now);
 
-  int months = 1;
-  if (plan == '6 Months') months = 6;
-  if (plan == 'Yearly') months = 12;
-  final validUntil =
-      Timestamp.fromDate(DateTime(now.year, now.month + months, now.day));
+    int months = 1;
+    if (plan == '6 Months') months = 6;
+    if (plan == 'Yearly') months = 12;
+    final validUntil =
+        Timestamp.fromDate(DateTime(now.year, now.month + months, now.day));
 
-  final ref = await _firestore
-      .collection('gyms')
-      .doc(gymId)
-      .collection('payments')
-      .add({
-    'memberId': memberId,
-    'amount': amount,
-    'method': 'easypaisa',
-    'markedBy': 'online',
-    'verified': false,
-    'status': 'pending',
-    'referenceCode': referenceCode,
-    'screenshot': screenshotUrl,
-    'plan': plan,
-    'validUntil': validUntil,
-    'timestamp': nowTs,
-    'createdAt': nowTs,
-    'updatedAt': nowTs,
-    'transactionId': referenceCode,
-  });
+    final ref = await _firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('payments')
+        .add({
+      'memberId': memberId,
+      'amount': amount,
+      'method': 'easypaisa',
+      'markedBy': 'online',
+      'verified': false,
+      'status': 'pending',
+      'referenceCode': referenceCode,
+      'screenshot': screenshotUrl,
+      'plan': plan,
+      'validUntil': validUntil,
+      'timestamp': nowTs,
+      'createdAt': nowTs,
+      'updatedAt': nowTs,
+      'transactionId': referenceCode,
+    });
 
-  // Also update member feeStatus to 'pending'
-  await _firestore
-      .collection('gyms')
-      .doc(gymId)
-      .collection('members')
-      .doc(memberId)
-      .update({'feeStatus': 'pending'});
+    // Also update member feeStatus to 'pending'
+    await _firestore
+        .collection('gyms')
+        .doc(gymId)
+        .collection('members')
+        .doc(memberId)
+        .update({'feeStatus': 'pending'});
 
-  return ref.id;
-}
+    return ref.id;
+  }
 
 }
