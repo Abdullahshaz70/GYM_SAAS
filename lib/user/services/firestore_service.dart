@@ -133,6 +133,17 @@ class FirestoreService {
   return 'REF-${gymId.substring(0, 4).toUpperCase()}-$ts';
 }
 
+
+  Future<Map<String, dynamic>?> getOwnerAccountCredentials() async{
+
+      try{
+          final doc = await _firestore.collection('gyms').doc().get();
+          return doc.exists ? doc.data() : null;
+      }catch(_){
+        return null;
+      }
+  }
+
 Future<Map<String, dynamic>?> getCompanyConfig() async {
   try {
     final doc = await _firestore.collection('config').doc('company').get();

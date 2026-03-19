@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../auth/login.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'screens/pay_fee_screen.dart';
+import 'screens/user_payment_history_screen.dart'; 
 
 class GymUser extends StatefulWidget {
   const GymUser({super.key});
@@ -191,12 +192,69 @@ class _GymUserScreen extends State<GymUser> {
                       ],
                     ),
                     const SizedBox(height: 20),
+                    
+                    
                     PaymentCard(
                         feeStatus: feeStatus,
                         isPaid: isPaid,
                         expiryDate: expiryDate,
-                        onPay: _openPayFeeScreen),
-                    const SizedBox(height: 30),
+                        onPay: _openPayFeeScreen,
+                      ),
+                      const SizedBox(height: 12),
+
+
+                      GestureDetector(
+  onTap: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const UserPaymentHistoryScreen(),
+    ),
+  ),
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    decoration: BoxDecoration(
+      color: Colors.blueAccent.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.blueAccent.withOpacity(0.2)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: Colors.blueAccent.withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.receipt_long_rounded,
+              color: Colors.blueAccent, size: 20),
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "My Payment History",
+                style: TextStyle(
+                    color: Colors.blueAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14),
+              ),
+              SizedBox(height: 2),
+              Text(
+                "View all transactions & screenshots",
+                style: TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.arrow_forward_ios_rounded,
+            color: Colors.blueAccent, size: 14),
+      ],
+    ),
+  ),
+),
+ 
                     const Text("ATTENDANCE HISTORY",
                         style: TextStyle(
                             fontSize: 14,
