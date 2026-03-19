@@ -43,6 +43,12 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
   List<Map<String, dynamic>> _filteredMembers = [];
   String _activeFilter = 'all';
 
+
+  static const int _pageSize = 15;
+  DocumentSnapshot? _lastDocument;
+  bool _hasMoreMembers = true;
+  bool _loadingMoreMembers = false;
+
   // ─── Lifecycle ───────────────────────────────────────────────────────────
 
   @override
@@ -59,129 +65,159 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
 
   // ─── Data fetching ────────────────────────────────────────────────────────
 
-  Future<void> _fetchGymStats() async {
-    if (!_loadingStats) setState(() => _loadingStats = true);
 
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final firestore = FirebaseFirestore.instance;
+Future<void> _fetchGymStats() async {
+  if (!_loadingStats) setState(() => _loadingStats = true);
 
-    final gymQuery = await firestore
-        .collection('gyms')
-        .where('ownerUid', isEqualTo: uid)
-        .limit(1)
-        .get();
+  final uid = FirebaseAuth.instance.currentUser!.uid;
+  final firestore = FirebaseFirestore.instance;
 
-    if (gymQuery.docs.isEmpty) {
-      setState(() => _loadingStats = false);
-      return;
-    }
+  final gymQuery = await firestore
+      .collection('gyms')
+      .where('ownerUid', isEqualTo: uid)
+      .limit(1)
+      .get();
 
-    _gymId = gymQuery.docs.first.id;
+  if (gymQuery.docs.isEmpty) {
+    setState(() => _loadingStats = false);
+    return;
+  }
 
-    final today = DateTime.now();
-    final todayKey =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+  _gymId = gymQuery.docs.first.id;
 
-    final attendanceSnapshot = await firestore
-        .collection('gyms')
-        .doc(_gymId)
+  final today = DateTime.now();
+  final todayKey =
+      '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+  // ✅ All 3 fetches run in parallel
+  final results = await Future.wait([
+    firestore.collection('gyms').doc(_gymId)
         .collection('attendance')
         .where('date', isEqualTo: todayKey)
-        .get();
-
-    final paymentsSnapshot = await firestore
-        .collection('gyms')
-        .doc(_gymId)
+        .get(),
+    firestore.collection('gyms').doc(_gymId)
         .collection('payments')
-        .get();
+        .get(),
+    firestore.collection('gyms').doc(_gymId)
+        .collection('members')
+        .get(),
+  ]);
 
-    double revenue = 0, cashRev = 0, onlineRev = 0;
-    int pendingCount = 0;
+  final attendanceSnapshot = results[0];
+  final paymentsSnapshot   = results[1];
+  final membersSnapshot    = results[2];
 
-    for (final doc in paymentsSnapshot.docs) {
-      final data = doc.data();
-      final amount = (data['amount'] as num).toDouble();
-      final method = (data['method'] ?? '').toString().toLowerCase();
-      final status = (data['status'] ?? '').toString().toLowerCase();
+  double revenue = 0, cashRev = 0, onlineRev = 0;
+  int pendingCount = 0;
 
-      final isOnline = method == 'easypaisa' || method == 'jazzcash';
+  for (final doc in paymentsSnapshot.docs) {
+    final data = doc.data();
+    final amount = (data['amount'] as num).toDouble();
+    final method = (data['method'] ?? '').toString().toLowerCase();
+    final status = (data['status'] ?? '').toString().toLowerCase();
 
-      if (status == 'pending' && isOnline) pendingCount++;
+    final isOnline = method == 'easypaisa' || method == 'jazzcash';
 
-      if (status == 'completed' || status == '') {
-        revenue += amount;
-        if (isOnline) {
-          onlineRev += amount;
-        } else {
-          cashRev += amount;
-        }
+    if (status == 'pending' && isOnline) pendingCount++;
+
+    if (status == 'completed' || status == '') {
+      revenue += amount;
+      if (isOnline) {
+        onlineRev += amount;
+      } else {
+        cashRev += amount;
       }
     }
+  }
 
-    final membersSnapshot = await firestore
+  setState(() {
+    _todayAttendanceCount = attendanceSnapshot.size;
+    _totalRevenue = revenue;
+    _cashRevenue = cashRev;
+    _onlineRevenue = onlineRev;
+    _pendingOnlineCount = pendingCount;
+    _totalMembers = membersSnapshot.size;
+    _gymName = gymQuery.docs.first['gymName'] ?? 'Owner';
+    _gymCode = gymQuery.docs.first['registrationCode'] ?? '';
+    _loadingStats = false;
+  });
+
+  await _fetchMembers(refresh: true);
+}
+Future<void> _fetchMembers({bool refresh = false}) async {
+  if (_gymId == null) return;
+
+  if (refresh) {
+    setState(() {
+      _allMembers = [];
+      _lastDocument = null;
+      _hasMoreMembers = true;
+      _loadingMembers = true;
+    });
+  } else {
+    if (!_hasMoreMembers || _loadingMoreMembers) return;
+    setState(() => _loadingMoreMembers = true);
+  }
+
+  try {
+    Query query = FirebaseFirestore.instance
         .collection('gyms')
         .doc(_gymId)
         .collection('members')
-        .get();
+        .limit(_pageSize);
 
-    setState(() {
-      _todayAttendanceCount = attendanceSnapshot.size;
-      _totalRevenue = revenue;
-      _cashRevenue = cashRev;
-      _onlineRevenue = onlineRev;
-      _pendingOnlineCount = pendingCount;
-      _totalMembers = membersSnapshot.size;
-      _gymName = gymQuery.docs.first['gymName'] ?? 'Owner';
-      _gymCode = gymQuery.docs.first['registrationCode'] ?? '';
-      _loadingStats = false;
+    if (_lastDocument != null) {
+      query = query.startAfterDocument(_lastDocument!);
+    }
+
+    final snapshot = await query.get();
+
+    if (snapshot.docs.isEmpty) {
+      setState(() {
+        _hasMoreMembers = false;
+        _loadingMembers = false;
+        _loadingMoreMembers = false;
+      });
+      return;
+    }
+
+    _lastDocument = snapshot.docs.last;
+
+    // ✅ Fetch all user docs in parallel instead of sequentially
+    final futures = snapshot.docs.map((doc) async {
+      final uid = doc.id;
+      final data = doc.data() as Map<String, dynamic>;
+
+      if ((data['role'] ?? 'member') == 'staff') return null;
+
+      return {
+        'uid': uid,
+        'name': data['name'] ?? 'Unknown',
+        'plan': data['plan'] ?? 'Monthly',
+        'feeStatus': data['feeStatus'] ?? 'unpaid',
+        'validUntil': data['validUntil'],
+      };
     });
 
-    await _fetchMembers();
+    final results = await Future.wait(futures);
+    final newMembers = results.whereType<Map<String, dynamic>>().toList();
+
+    setState(() {
+      _allMembers.addAll(newMembers);
+      _hasMoreMembers = snapshot.docs.length == _pageSize;
+      _applyFilter();
+      _loadingMembers = false;
+      _loadingMoreMembers = false;
+    });
+  } catch (_) {
+    setState(() {
+      _loadingMembers = false;
+      _loadingMoreMembers = false;
+    });
   }
+}
 
-  Future<void> _fetchMembers() async {
-    if (_gymId == null) return;
-    setState(() => _loadingMembers = true);
 
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('gyms')
-          .doc(_gymId)
-          .collection('members')
-          .get();
-
-      final members = <Map<String, dynamic>>[];
-
-      for (final doc in snapshot.docs) {
-        final uid = doc.id;
-        final data = doc.data();
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .get();
-
-        if ((userDoc.data()?['role'] ?? 'member') == 'staff') continue;
-
-        members.add({
-          'uid': uid,
-          'name': userDoc.exists
-              ? (userDoc.data()?['name'] ?? 'Unknown')
-              : 'Unknown',
-          'plan': data['plan'] ?? 'Monthly',
-          'feeStatus': data['feeStatus'] ?? 'unpaid',
-          'validUntil': data['validUntil'],
-        });
-      }
-
-      setState(() {
-        _allMembers = members;
-        _applyFilter();
-        _loadingMembers = false;
-      });
-    } catch (_) {
-      setState(() => _loadingMembers = false);
-    }
-  }
 
   // ─── Filtering ────────────────────────────────────────────────────────────
 
@@ -391,6 +427,7 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
                 ),
               ],
               const SizedBox(height: 28),
+            
               MemberListSection(
                 members: _filteredMembers,
                 gymId: _gymId!,
@@ -400,7 +437,11 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
                 onSearchChanged: _onSearchChanged,
                 onFilterChanged: _onFilterChanged,
                 totalCount: _totalMembers,
+                hasMore: _hasMoreMembers,                    
+                isLoadingMore: _loadingMoreMembers,          
+                onLoadMore: () => _fetchMembers(),  
               ),
+            
             ],
           ),
         ),

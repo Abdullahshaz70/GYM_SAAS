@@ -763,19 +763,31 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
+
   void _makeCall() async {
     if (contactNumber.isNotEmpty) {
       final Uri url = Uri.parse("tel:$contactNumber");
-      if (await canLaunchUrl(url)) await launchUrl(url);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
     }
   }
 
   void _sendWhatsApp() async {
-    if (contactNumber.isNotEmpty) {
-      String cleanNumber =
-          contactNumber.replaceAll(RegExp(r'[^0-9]'), '');
-      final Uri url = Uri.parse("https://wa.me/$cleanNumber");
-      if (await canLaunchUrl(url)) await launchUrl(url);
+  if (contactNumber.isNotEmpty) {
+    String cleanNumber = contactNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    final Uri url = Uri.parse("https://wa.me/$cleanNumber");
+    
+    if (await canLaunchUrl(url)) {
+      await launchUrl(
+        url, 
+        mode: LaunchMode.externalApplication, 
+      );
+    } else {
+      print("Could not launch WhatsApp for $url");
     }
   }
+}
+
+
 }
