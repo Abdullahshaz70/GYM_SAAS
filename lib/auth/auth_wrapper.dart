@@ -208,7 +208,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login.dart';
 import '../user/gym_user.dart';
-import '../owner/gym_owner.dart';
+import '../owner/gym_owner_screen.dart';
 import '../staff/gym_staff.dart';
 
 class AuthWrapper extends StatelessWidget {
@@ -240,7 +240,7 @@ class AuthWrapper extends StatelessWidget {
 
             if (userSnapshot.hasData && userSnapshot.data!.exists) {
               String role = userSnapshot.data!['role'];
-              if (role == 'owner') return const GymOwner();
+              if (role == 'owner') return const GymOwnerScreen();
               if (role == 'staff') return const GymStaff();
               return const GymUser();
             }

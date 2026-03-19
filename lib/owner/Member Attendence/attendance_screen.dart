@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../user/screens/skeleton_loaders.dart'; // ← NEW
+import '../../user/screens/skeleton_loaders.dart'; // ← NEW
 
 class AttendanceScreen extends StatefulWidget {
   final String uid;

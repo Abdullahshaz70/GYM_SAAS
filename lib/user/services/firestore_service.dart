@@ -97,36 +97,34 @@ class FirestoreService {
     };
   }
 
-  Future<void> requestPayout({
-    required String gymId,
-    required double amount,
-    required String accountType,
-    required String accountNumber,
-  }) async {
-    await _firestore
-        .collection('gyms')
-        .doc(gymId)
-        .collection('payouts')
-        .add({
-      'amount': amount,
-      'accountType': accountType,
-      'accountNumber': accountNumber,
-      'status': 'pending',
-      'requestedAt': FieldValue.serverTimestamp(),
-      'processedAt': null,
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> getPayouts(String gymId) async {
-    final snap = await _firestore
-        .collection('gyms')
-        .doc(gymId)
-        .collection('payouts')
-        .orderBy('requestedAt', descending: true)
-        .get();
-
-    return snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
-  }
+  // Future<void> requestPayout({
+  //   required String gymId,
+  //   required double amount,
+  //   required String accountType,
+  //   required String accountNumber,
+  // }) async {
+  //   await _firestore
+  //       .collection('gyms')
+  //       .doc(gymId)
+  //       .collection('payouts')
+  //       .add({
+  //     'amount': amount,
+  //     'accountType': accountType,
+  //     'accountNumber': accountNumber,
+  //     'status': 'pending',
+  //     'requestedAt': FieldValue.serverTimestamp(),
+  //     'processedAt': null,
+  //   });
+  // }
+  // Future<List<Map<String, dynamic>>> getPayouts(String gymId) async {
+  //   final snap = await _firestore
+  //       .collection('gyms')
+  //       .doc(gymId)
+  //       .collection('payouts')
+  //       .orderBy('requestedAt', descending: true)
+  //       .get();
+  //  return snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+  // }
 
   String generateReferenceCode(String gymId, String memberId) {
   final ts = DateTime.now().millisecondsSinceEpoch.toString().substring(7);

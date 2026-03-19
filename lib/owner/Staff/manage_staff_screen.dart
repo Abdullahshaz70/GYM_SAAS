@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../user/screens/skeleton_loaders.dart';
+import '../../user/screens/skeleton_loaders.dart';
 
 class ManageStaffScreen extends StatefulWidget {
   final String gymId;

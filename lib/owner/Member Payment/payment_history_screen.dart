@@ -113,7 +113,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import '../user/screens/skeleton_loaders.dart';
+import '../../user/screens/skeleton_loaders.dart';
 
 class PaymentHistoryScreen extends StatelessWidget {
   final String uid;

@@ -5,7 +5,7 @@ import 'package:saas/qr_scan.dart';
 import 'package:saas/staff/gym_staff.dart';
 import 'register.dart';
 
-import '../owner/gym_owner.dart';
+import '../owner/gym_owner_screen.dart';
 import '../user/gym_user.dart';
 
 class Login extends StatefulWidget {
@@ -117,7 +117,7 @@ class _LoginState extends State<Login> {
     } else if (role == 'owner') {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const GymOwner()),
+        MaterialPageRoute(builder: (context) => const GymOwnerScreen()),
         (route) => false,
       );
     }
