@@ -398,6 +398,7 @@ Future<void> _fetchMembers({bool refresh = false}) async {
         color: Colors.yellowAccent,
         backgroundColor: Colors.grey[900],
         child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
