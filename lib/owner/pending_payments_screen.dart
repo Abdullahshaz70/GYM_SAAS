@@ -129,7 +129,7 @@ class _PendingPaymentsScreenState extends State<PendingPaymentsScreen> {
     }
   }
 
- Future<void> _reject(Map<String, dynamic> payment) async {
+Future<void> _reject(Map<String, dynamic> payment) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(
@@ -164,28 +164,31 @@ class _PendingPaymentsScreenState extends State<PendingPaymentsScreen> {
 
   try {
     final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
 
-    await Future.wait([
-      // Mark the payment as rejected
-      firestore
-          .collection('gyms')
-          .doc(widget.gymId)
-          .collection('payments')
-          .doc(payment['paymentId'])
-          .update({
-        'status': 'rejected',
-        'updatedAt': Timestamp.now(),
-      }),
-      // Reset member fee status back to unpaid
-      firestore
-          .collection('gyms')
-          .doc(widget.gymId)
-          .collection('members')
-          .doc(payment['memberUid'])
-          .update({
-        'feeStatus': 'unpaid',
-      }),
-    ]);
+    // 1. Update payment status → rejected
+    final payRef = firestore
+        .collection('gyms')
+        .doc(widget.gymId)
+        .collection('payments')
+        .doc(payment['paymentId']);
+    batch.update(payRef, {
+      'status': 'rejected',
+      'verified': false,
+      'updatedAt': Timestamp.now(),
+    });
+
+    // 2. Update member feeStatus → unpaid (fixed key: 'memberId' not 'memberUid')
+    final memberRef = firestore
+        .collection('gyms')
+        .doc(widget.gymId)
+        .collection('members')
+        .doc(payment['memberId']);  // ← THIS was the bug
+    batch.update(memberRef, {
+      'feeStatus': 'unpaid',
+    });
+
+    await batch.commit();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -206,7 +209,8 @@ class _PendingPaymentsScreenState extends State<PendingPaymentsScreen> {
     }
   }
 }
-  void _viewScreenshot(String url) {
+  
+void _viewScreenshot(String url) {
     showDialog(
       context: context,
       builder: (_) => Dialog(
