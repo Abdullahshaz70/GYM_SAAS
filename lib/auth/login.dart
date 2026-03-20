@@ -4,9 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:saas/shared/qr_scan.dart';
 import 'package:saas/features/staff/gym_staff.dart';
 import 'register.dart';
+import 'forgot_password_screen.dart';
 
 import '../features/owner/gym_owner_screen.dart';
 import '../features/user/gym_user.dart';
+
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -140,9 +142,7 @@ class _LoginState extends State<Login> {
     if (mounted) setState(() => _isLoading = false);
   }
 }
- 
- 
- 
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -245,9 +245,25 @@ class _LoginState extends State<Login> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 30),
+                      // const SizedBox(height: 30),
                     
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text("Forgot Password?"),
+                      ),
                     
+                      ),
+                      
                     
                       SizedBox(
                         width: double.infinity,
