@@ -1,84 +1,3 @@
-// import 'package:flutter/material.dart';
-
-// class AttendanceCard extends StatelessWidget {
-//   const AttendanceCard({
-//     super.key,
-//     required this.count,
-//     required this.onScanTap,
-//   });
-
-//   final int count;
-//   final VoidCallback onScanTap;
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Container(
-//       width: double.infinity,
-//       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-//       decoration: BoxDecoration(
-//         color: Colors.grey[900],
-//         borderRadius: BorderRadius.circular(12),
-//         border: Border.all(color: Colors.white10),
-//       ),
-//       child: Row(
-//         children: [
-//           Expanded(
-//             child: Column(
-//               crossAxisAlignment: CrossAxisAlignment.start,
-//               mainAxisSize: MainAxisSize.min,
-//               children: [
-//                 const Text(
-//                   'TODAY',
-//                   style: TextStyle(
-//                     color: Colors.white54,
-//                     fontSize: 10,
-//                     fontWeight: FontWeight.bold,
-//                     letterSpacing: 1.2,
-//                   ),
-//                 ),
-//                 const SizedBox(height: 4),
-//                 Text(
-//                   '$count Members Checked In',
-//                   style: const TextStyle(
-//                     color: Colors.white,
-//                     fontSize: 15,
-//                     fontWeight: FontWeight.w600,
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//           Material(
-//             color: Colors.yellowAccent,
-//             borderRadius: BorderRadius.circular(8),
-//             child: InkWell(
-//               onTap: onScanTap,
-//               borderRadius: BorderRadius.circular(8),
-//               child: const Padding(
-//                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//                 child: Row(
-//                   children: [
-//                     Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.black),
-//                     SizedBox(width: 6),
-//                     Text(
-//                       'SCAN',
-//                       style: TextStyle(
-//                         color: Colors.black,
-//                         fontWeight: FontWeight.bold,
-//                         fontSize: 12,
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
 import 'package:flutter/material.dart';
 
 class AttendanceCard extends StatelessWidget {
@@ -188,7 +107,7 @@ class _ScanButton extends StatelessWidget {
                   size: 16, color: Colors.yellowAccent),
               SizedBox(width: 6),
               Text(
-                'SCAN QR',
+                'QR CODE',
                 style: TextStyle(
                   color: Colors.yellowAccent,
                   fontWeight: FontWeight.w700,

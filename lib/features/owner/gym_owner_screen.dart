@@ -14,6 +14,7 @@ import 'widgets/pending_banner.dart';
 import 'widgets/qr_sheets.dart';
 import 'widgets/stats_strip.dart';
 import '../../shared/gym_status_service.dart';
+import '../../shared/utils.dart';
 
 class GymOwnerScreen extends StatefulWidget {
   const GymOwnerScreen({super.key});
@@ -265,7 +266,8 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
   Future<void> _logout() async {
     if (_isLoggingOut) return;
 
-    final confirmed = await _showConfirmDialog(
+    final confirmed = await showConfirmDialog(
+      context:context,
       title: 'Log out',
       message: 'Are you sure you want to log out?',
       confirmLabel: 'Log out',
@@ -293,44 +295,6 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  Future<bool> _showConfirmDialog({
-    required String title,
-    required String message,
-    required String confirmLabel,
-    bool isDestructive = false,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content:
-            Text(message, style: const TextStyle(color: Colors.white60)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              confirmLabel,
-              style: TextStyle(
-                color: isDestructive
-                    ? Colors.redAccent
-                    : Colors.yellowAccent,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
 
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
@@ -454,7 +418,10 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: _buildAppBar(),
-      body: Column(
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: (){FocusScope.of(context).unfocus();},
+        child:       Column(
         children: [
           // Read-only banner
           if (_isReadOnly)
@@ -545,6 +512,16 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
           ),
         ],
       ),
+    
+      )
+      
+      
+      
+      
+      
+
+    
+    
     );
   }
 

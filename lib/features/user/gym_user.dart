@@ -12,6 +12,7 @@ import 'screens/payment_pending_screen.dart';
 import '../../shared/qr_scan.dart';
 import '../../auth/login.dart';
 import '../../shared/gym_status_service.dart';
+import '../../shared/utils.dart';
 
 class GymUser extends StatefulWidget {
   const GymUser({super.key});
@@ -44,10 +45,13 @@ class _GymUserState extends State<GymUser> {
   DateTime    _selectedDay  = DateTime.now();
   Set<String> _presentDates = {};
 
+  bool _isLoggingOut = false;
+
   // ─── Computed helpers ───────────────────────────────────────────────────
   bool get _isLocked   => _gymStatus?.access == GymAccessLevel.locked;
   bool get _isReadOnly => _gymStatus?.access == GymAccessLevel.readOnly;
   bool get _isFull     => _gymStatus?.access == GymAccessLevel.full;
+
 
   @override
   void initState() {
@@ -222,15 +226,36 @@ class _GymUserState extends State<GymUser> {
     )).then((_) => _loadUserData());
   }
 
-  Future<void> _logout() async {
+    Future<void> _logout() async {
+    if (_isLoggingOut) return;
+
+    final confirmed = await showConfirmDialog(
+      context: context,
+      title: 'Log out',
+      message: 'Are you sure you want to log out?',
+      confirmLabel: 'Log out',
+      isDestructive: true,
+    );
+    if (!confirmed) return;
+
+    setState(() => _isLoggingOut = true);
     try {
       await FirebaseAuth.instance.signOut();
-      if (mounted) Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const Login()), (_) => false);
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const Login()),
+          (_) => false,
+        );
+      }
     } catch (e) {
-      if (mounted) _showSnackBar('Error logging out: $e', Colors.red);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error logging out: $e')));
+      }
+      setState(() => _isLoggingOut = false);
     }
   }
+
 
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
