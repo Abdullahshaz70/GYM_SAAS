@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../user/screens/skeleton_loaders.dart';
+import '../../../shared/skeleton_loaders.dart';
 import 'member_tile.dart';
 
 class MemberListSection extends StatelessWidget {
@@ -13,9 +13,10 @@ class MemberListSection extends StatelessWidget {
     required this.onSearchChanged,
     required this.onFilterChanged,
     this.totalCount,
-    this.hasMore = false,        
-    this.isLoadingMore = false,  
-    this.onLoadMore, 
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
+    this.isReadOnly = false,
   });
 
   final List<Map<String, dynamic>> members;
@@ -28,9 +29,8 @@ class MemberListSection extends StatelessWidget {
   final bool hasMore;
   final bool isLoadingMore;
   final VoidCallback? onLoadMore;
-
-  /// Pass the unfiltered total so the badge always shows the gym's full count.
   final int? totalCount;
+  final bool isReadOnly;
 
   static const _filters = ['all', 'paid', 'unpaid', 'pending'];
 
@@ -60,13 +60,12 @@ class MemberListSection extends StatelessWidget {
           hasMore: hasMore,
           isLoadingMore: isLoadingMore,
           onLoadMore: onLoadMore,
+          isReadOnly: isReadOnly,
         ),
       ],
     );
   }
 }
-
-// ─── Header ───────────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({this.count});
@@ -107,8 +106,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─── Search bar ───────────────────────────────────────────────────────────────
-
 class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.controller, required this.onChanged});
 
@@ -123,9 +120,10 @@ class _SearchBar extends StatelessWidget {
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
         hintText: 'Search members...',
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
-        prefixIcon: const Icon(Icons.search_rounded,
-            color: Colors.white38, size: 18),
+        hintStyle:
+            TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+        prefixIcon:
+            const Icon(Icons.search_rounded, color: Colors.white38, size: 18),
         filled: true,
         fillColor: const Color(0xFF141414),
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -141,8 +139,6 @@ class _SearchBar extends StatelessWidget {
     );
   }
 }
-
-// ─── Filter chips ─────────────────────────────────────────────────────────────
 
 class _FilterChips extends StatelessWidget {
   const _FilterChips({
@@ -200,8 +196,6 @@ class _FilterChips extends StatelessWidget {
   }
 }
 
-// ─── List body ────────────────────────────────────────────────────────────────
-
 class _MemberListBody extends StatelessWidget {
   const _MemberListBody({
     required this.members,
@@ -210,6 +204,7 @@ class _MemberListBody extends StatelessWidget {
     this.hasMore = false,
     this.isLoadingMore = false,
     this.onLoadMore,
+    this.isReadOnly = false,  // ✅ correct parameter syntax
   });
 
   final List<Map<String, dynamic>> members;
@@ -218,6 +213,7 @@ class _MemberListBody extends StatelessWidget {
   final bool hasMore;
   final bool isLoadingMore;
   final VoidCallback? onLoadMore;
+  final bool isReadOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +231,7 @@ class _MemberListBody extends StatelessWidget {
       );
     }
 
-   return NotificationListener<ScrollEndNotification>(
+    return NotificationListener<ScrollEndNotification>(
       onNotification: (notification) {
         if (notification.metrics.extentAfter < 100 && hasMore) {
           onLoadMore?.call();
@@ -245,18 +241,23 @@ class _MemberListBody extends StatelessWidget {
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: members.length + (isLoadingMore ? 1 : 0), // +1 for loader
+        itemCount: members.length + (isLoadingMore ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (_, i) {
           if (i == members.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                child: CircularProgressIndicator(color: Colors.yellowAccent),
+                child:
+                    CircularProgressIndicator(color: Colors.yellowAccent),
               ),
             );
           }
-          return MemberTile(member: members[i], gymId: gymId);
+          return MemberTile(
+            member: members[i],
+            gymId: gymId,
+            isReadOnly: isReadOnly,
+          );
         },
       ),
     );

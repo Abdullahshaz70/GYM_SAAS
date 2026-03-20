@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'Member Attendence/attendance_screen.dart';
 import 'Member Payment/payment_history_screen.dart';
 import 'Membership Details/membership_screen.dart';
-import '../user/screens/skeleton_loaders.dart'; // ← NEW
+import '../../shared/skeleton_loaders.dart'; // ← NEW
 
 class MemberDetailScreen extends StatefulWidget {
   final String uid;

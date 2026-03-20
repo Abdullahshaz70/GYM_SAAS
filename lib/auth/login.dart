@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:saas/qr_scan.dart';
-import 'package:saas/staff/gym_staff.dart';
+import 'package:saas/shared/qr_scan.dart';
+import 'package:saas/features/staff/gym_staff.dart';
 import 'register.dart';
 
-import '../owner/gym_owner_screen.dart';
-import '../user/gym_user.dart';
+import '../features/owner/gym_owner_screen.dart';
+import '../features/user/gym_user.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});

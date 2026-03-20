@@ -1,3 +1,4 @@
+// member_tile.dart
 import 'package:flutter/material.dart';
 import '../member_detail.dart';
 
@@ -6,14 +7,17 @@ class MemberTile extends StatelessWidget {
     super.key,
     required this.member,
     required this.gymId,
+    this.isReadOnly = false,
   });
 
   final Map<String, dynamic> member;
   final String gymId;
+  final bool isReadOnly;
 
   @override
   Widget build(BuildContext context) {
-    final status = (member['feeStatus'] ?? 'unpaid').toString().toLowerCase();
+    final status =
+        (member['feeStatus'] ?? 'unpaid').toString().toLowerCase();
     final statusColor = switch (status) {
       'paid' => Colors.greenAccent,
       'pending' => Colors.orangeAccent,
@@ -21,17 +25,25 @@ class MemberTile extends StatelessWidget {
     };
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              MemberDetailScreen(uid: member['uid'] ?? '', gymId: gymId),
-        ),
-      ),
+      // ✅ null disables tap entirely in read-only mode
+      onTap: isReadOnly
+          ? null
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MemberDetailScreen(
+                    uid: member['uid'] ?? '',
+                    gymId: gymId,
+                  ),
+                ),
+              ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
+          // Slightly dimmer in read-only to hint non-interactivity
+          color: isReadOnly
+              ? Colors.white.withOpacity(0.02)
+              : Colors.white.withOpacity(0.04),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.white.withOpacity(0.06)),
         ),
@@ -56,15 +68,18 @@ class MemberTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     member['plan'] ?? 'Monthly',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: const TextStyle(
+                        color: Colors.white38, fontSize: 12),
                   ),
                 ],
               ),
             ),
             _StatusBadge(status: status, color: statusColor),
             const SizedBox(width: 6),
-            const Icon(Icons.chevron_right_rounded,
-                color: Colors.white24, size: 18),
+            // Hide chevron in read-only — nothing to navigate to
+            if (!isReadOnly)
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white24, size: 18),
           ],
         ),
       ),
