@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.saas"
+    namespace = "com.abdullah.saas"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.saas"
+        applicationId = "com.abdullah.saas"
         // 2. Setting this to 24 fixes the deprecation warning
         minSdk = 24 
         targetSdk = flutter.targetSdkVersion
