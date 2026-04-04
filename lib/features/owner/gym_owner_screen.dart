@@ -16,6 +16,8 @@ import 'widgets/stats_strip.dart';
 import '../../shared/gym_status_service.dart';
 import '../../shared/utils.dart';
 
+import 'analytics/owner_analytics_screen.dart';
+
 class GymOwnerScreen extends StatefulWidget {
   const GymOwnerScreen({super.key});
 
@@ -549,6 +551,19 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
           onPressed: _showActionMenu,
         ),
         const SizedBox(width: 8),
+        IconButton(
+  icon: const Icon(Icons.analytics_rounded, color: Colors.white70),
+  tooltip: 'Owner Analytics',
+  onPressed: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => OwnerAnalyticsScreen(
+        gymId:   _gymId!,
+        gymName: _gymName ?? 'My Gym',
+      ),
+    ),
+  ),
+),
       ],
     );
   }
