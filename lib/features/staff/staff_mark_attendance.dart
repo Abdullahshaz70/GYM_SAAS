@@ -38,8 +38,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
       final q = _searchCtrl.text.toLowerCase();
       setState(() {
         _filtered = widget.members
-            .where((m) =>
-                (m['name'] as String).toLowerCase().contains(q))
+            .where((m) => (m['name'] as String).toLowerCase().contains(q))
             .toList();
       });
     });
@@ -76,7 +75,6 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
     super.dispose();
   }
 
-  // ── Mark attendance ──────────────────────────────────────────────────
   Future<void> _doMarkAttendance(Map<String, dynamic> member) async {
     final uid = member['uid'] as String;
     if (_checkedInTodayUids.contains(uid)) {
@@ -103,7 +101,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
             '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
       });
       setState(() => _checkedInTodayUids.add(uid));
-      _showSnack('✅ ${member['name']} checked in', Colors.green);
+      _showSnack('✅ ${member['name']} checked in', Colors.greenAccent);
     } catch (e) {
       _showSnack('Error: $e', Colors.redAccent);
     } finally {
@@ -115,9 +113,10 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
     return await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
+            backgroundColor: const Color(0xFF141414),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: Colors.white.withOpacity(0.08))),
             title: const Text('Confirm Check-in',
                 style: TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold)),
@@ -127,14 +126,13 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
               children: [
                 Text(memberName,
                     style: const TextStyle(
-                        color: Colors.greenAccent,
+                        color: Colors.yellowAccent,
                         fontSize: 18,
                         fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(
                   DateFormat('EEEE, dd MMM yyyy').format(DateTime.now()),
-                  style:
-                      const TextStyle(color: Colors.white54, fontSize: 13),
+                  style: const TextStyle(color: Colors.white54, fontSize: 13),
                 ),
               ],
             ),
@@ -146,7 +144,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.greenAccent,
+                  backgroundColor: Colors.yellowAccent,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
@@ -163,15 +161,15 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
 
   void _showSnack(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
+      content: Text(msg,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
       backgroundColor: color,
       behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
     ));
   }
 
-  // ── Build ────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -181,7 +179,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
-              size: 18, color: Colors.white70),
+              size: 18, color: Colors.white54),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -201,8 +199,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.06),
@@ -211,15 +208,14 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
               child: TabBar(
                 controller: _tabController,
                 indicator: BoxDecoration(
-                  color: Colors.greenAccent.withOpacity(0.18),
+                  color: Colors.yellowAccent.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: Colors.greenAccent.withOpacity(0.4),
-                      width: 1),
+                      color: Colors.yellowAccent.withOpacity(0.4), width: 1),
                 ),
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
-                labelColor: Colors.greenAccent,
+                labelColor: Colors.yellowAccent,
                 unselectedLabelColor: Colors.white38,
                 labelStyle: const TextStyle(
                     fontSize: 12,
@@ -262,7 +258,6 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
     );
   }
 
-  // ── QR Tab: display the gym attendance QR for members to scan ────────
   Widget _buildQRTab() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
@@ -272,20 +267,17 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
-              child: CircularProgressIndicator(color: Colors.greenAccent));
+              child: CircularProgressIndicator(color: Colors.yellowAccent));
         }
 
-        final data =
-            snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
         final token = data['currentAttendanceQrToken'] ?? '';
-        final expiresAt =
-            data['attendanceQrExpiresAt'] as Timestamp?;
+        final expiresAt = data['attendanceQrExpiresAt'] as Timestamp?;
         final isExpired = expiresAt != null &&
             expiresAt.toDate().isBefore(DateTime.now());
 
         return SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
             children: [
               // Stats row
@@ -294,14 +286,14 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                   _miniStat(
                     label: 'Checked in today',
                     value: '${_checkedInTodayUids.length}',
-                    color: Colors.greenAccent,
+                    color: Colors.yellowAccent,
                     icon: Icons.how_to_reg_rounded,
                   ),
                   const SizedBox(width: 12),
                   _miniStat(
                     label: 'Total members',
                     value: '${widget.members.length}',
-                    color: Colors.blueAccent,
+                    color: Colors.white54,
                     icon: Icons.group_rounded,
                   ),
                 ],
@@ -312,15 +304,15 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
               // QR display card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 32, horizontal: 24),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: const Color(0xFF141414),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
                     color: isExpired
                         ? Colors.redAccent.withOpacity(0.3)
-                        : Colors.greenAccent.withOpacity(0.25),
+                        : Colors.yellowAccent.withOpacity(0.2),
                     width: 1.5,
                   ),
                 ),
@@ -335,7 +327,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                               : Icons.qr_code_2_rounded,
                           color: isExpired
                               ? Colors.redAccent
-                              : Colors.greenAccent,
+                              : Colors.yellowAccent,
                           size: 18,
                         ),
                         const SizedBox(width: 8),
@@ -346,7 +338,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                           style: TextStyle(
                             color: isExpired
                                 ? Colors.redAccent
-                                : Colors.greenAccent,
+                                : Colors.yellowAccent,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.5,
@@ -357,26 +349,24 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                     const SizedBox(height: 6),
                     const Text(
                       'Members scan this with their app to check in',
-                      style:
-                          TextStyle(color: Colors.white38, fontSize: 12),
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
                     ),
 
                     const SizedBox(height: 28),
 
-                    // QR or placeholder
                     if (token.isEmpty || isExpired)
                       Container(
                         width: 230,
                         height: 230,
                         decoration: BoxDecoration(
-                          color: Colors.white10,
+                          color: Colors.white.withOpacity(0.04),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const Icon(Icons.refresh_rounded,
-                                color: Colors.white38, size: 48),
+                                color: Colors.white24, size: 48),
                             const SizedBox(height: 12),
                             Text(
                               isExpired
@@ -396,8 +386,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color:
-                                  Colors.greenAccent.withOpacity(0.15),
+                              color: Colors.yellowAccent.withOpacity(0.15),
                               blurRadius: 30,
                               spreadRadius: 4,
                             ),
@@ -421,13 +410,12 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
 
                     const SizedBox(height: 24),
 
-                    // Token + expiry info
                     if (token.isNotEmpty && !isExpired)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withOpacity(0.04),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(
@@ -450,11 +438,10 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                             ),
                             if (expiresAt != null) ...[
                               const SizedBox(height: 4),
-                              Text(
+                              const Text(
                                 'Auto-rotates at midnight',
-                                style: const TextStyle(
-                                    color: Colors.white24,
-                                    fontSize: 10),
+                                style: TextStyle(
+                                    color: Colors.white24, fontSize: 10),
                               ),
                             ],
                           ],
@@ -470,21 +457,20 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.06),
+                  color: Colors.white.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: Colors.blueAccent.withOpacity(0.15)),
+                  border: Border.all(color: Colors.white.withOpacity(0.06)),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.tips_and_updates_rounded,
-                        color: Colors.blueAccent, size: 16),
-                    const SizedBox(width: 10),
-                    const Expanded(
+                    Icon(Icons.tips_and_updates_rounded,
+                        color: Colors.white38, size: 16),
+                    SizedBox(width: 10),
+                    Expanded(
                       child: Text(
                         'Keep this screen visible. Members open their app and scan this QR to self-check-in. Use the Manual tab to check in someone without a phone.',
-                        style: TextStyle(
-                            color: Colors.white54, fontSize: 12),
+                        style:
+                            TextStyle(color: Colors.white54, fontSize: 12),
                       ),
                     ),
                   ],
@@ -536,7 +522,6 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
     );
   }
 
-  // ── Manual Tab ───────────────────────────────────────────────────────
   Widget _buildManualTab() {
     return Column(
       children: [
@@ -547,38 +532,33 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Search member by name...',
-              hintStyle:
-                  const TextStyle(color: Colors.white38, fontSize: 14),
-              prefixIcon: const Icon(Icons.search,
-                  color: Colors.white38, size: 20),
+              hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+              prefixIcon:
+                  const Icon(Icons.search, color: Colors.white38, size: 20),
               filled: true,
               fillColor: Colors.white.withOpacity(0.05),
-              contentPadding: const EdgeInsets.symmetric(
-                  vertical: 12, horizontal: 16),
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Colors.white12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide:
-                    const BorderSide(color: Colors.greenAccent),
+                borderSide: const BorderSide(color: Colors.yellowAccent),
               ),
             ),
           ),
         ),
         Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Row(
             children: [
-              const Icon(Icons.info_outline,
-                  color: Colors.white24, size: 12),
+              const Icon(Icons.info_outline, color: Colors.white24, size: 12),
               const SizedBox(width: 6),
               Text(
                 '${_checkedInTodayUids.length} of ${widget.members.length} checked in today',
-                style: const TextStyle(
-                    color: Colors.white24, fontSize: 11),
+                style: const TextStyle(color: Colors.white24, fontSize: 11),
               ),
             ],
           ),
@@ -587,17 +567,15 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
           child: _isLoadingCheckins
               ? const Center(
                   child: CircularProgressIndicator(
-                      color: Colors.greenAccent, strokeWidth: 2))
+                      color: Colors.yellowAccent, strokeWidth: 2))
               : _filtered.isEmpty
                   ? const Center(
                       child: Text('No members found',
                           style: TextStyle(color: Colors.white38)))
                   : ListView.builder(
-                      padding:
-                          const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                       itemCount: _filtered.length,
-                      itemBuilder: (_, i) =>
-                          _memberTile(_filtered[i]),
+                      itemBuilder: (_, i) => _memberTile(_filtered[i]),
                     ),
         ),
       ],
@@ -615,12 +593,12 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
       decoration: BoxDecoration(
         color: alreadyIn
             ? Colors.greenAccent.withOpacity(0.04)
-            : Colors.white.withOpacity(0.04),
+            : const Color(0xFF141414),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: alreadyIn
               ? Colors.greenAccent.withOpacity(0.15)
-              : Colors.white.withOpacity(0.05),
+              : Colors.white.withOpacity(0.06),
         ),
       ),
       child: Row(
@@ -636,9 +614,7 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                 child: Text(
                   (m['name'] as String)[0].toUpperCase(),
                   style: TextStyle(
-                    color: alreadyIn
-                        ? Colors.greenAccent
-                        : Colors.yellowAccent,
+                    color: alreadyIn ? Colors.greenAccent : Colors.yellowAccent,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -651,11 +627,9 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                   decoration: BoxDecoration(
                     color: Colors.greenAccent,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                        color: Colors.black, width: 1.5),
+                    border: Border.all(color: Colors.black, width: 1.5),
                   ),
-                  child: const Icon(Icons.check,
-                      color: Colors.black, size: 10),
+                  child: const Icon(Icons.check, color: Colors.black, size: 10),
                 ),
             ],
           ),
@@ -667,21 +641,17 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
                 Text(
                   m['name'],
                   style: TextStyle(
-                    color:
-                        alreadyIn ? Colors.white54 : Colors.white,
+                    color: alreadyIn ? Colors.white54 : Colors.white,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  alreadyIn
-                      ? 'Checked in today'
-                      : (m['plan'] ?? 'Member'),
+                  alreadyIn ? 'Checked in today' : (m['plan'] ?? 'Member'),
                   style: TextStyle(
-                    color: alreadyIn
-                        ? Colors.greenAccent
-                        : Colors.white38,
+                    color:
+                        alreadyIn ? Colors.greenAccent : Colors.white38,
                     fontSize: 11,
                   ),
                 ),
@@ -691,8 +661,8 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
           const SizedBox(width: 10),
           if (alreadyIn)
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.greenAccent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
@@ -708,23 +678,23 @@ class _StaffMarkAttendanceState extends State<StaffMarkAttendance>
               width: 24,
               height: 24,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.greenAccent),
+                  strokeWidth: 2, color: Colors.yellowAccent),
             )
           else
             GestureDetector(
               onTap: () => _doMarkAttendance(m),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.greenAccent.withOpacity(0.12),
+                  color: Colors.yellowAccent.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: Colors.greenAccent.withOpacity(0.3)),
+                      color: Colors.yellowAccent.withOpacity(0.3)),
                 ),
                 child: const Text('CHECK IN',
                     style: TextStyle(
-                        color: Colors.greenAccent,
+                        color: Colors.yellowAccent,
                         fontSize: 11,
                         fontWeight: FontWeight.bold)),
               ),

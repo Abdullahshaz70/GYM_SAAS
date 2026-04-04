@@ -12,5 +12,42 @@
       ],
       "source": "functions"
     }
-  ]
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "gym-saas-b2851",
+          "appId": "1:35735645622:android:7087b76925295ca1a56517",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "gym-saas-b2851",
+          "configurations": {
+            "android": "1:35735645622:android:7087b76925295ca1a56517",
+            "ios": "1:35735645622:ios:9621d3399f229dd5a56517",
+            "macos": "1:35735645622:ios:9621d3399f229dd5a56517",
+            "web": "1:35735645622:web:0c8bb1b481626eeea56517",
+            "windows": "1:35735645622:web:fbf2a6b3a7f2c403a56517"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
 }
