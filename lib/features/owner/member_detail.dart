@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'Member Attendence/attendance_screen.dart';
 import 'Member Payment/payment_history_screen.dart';
 import 'Membership Details/membership_screen.dart';
-import '../../shared/skeleton_loaders.dart'; // ← NEW
+import '../../shared/skeleton_loaders.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final String uid;
@@ -19,60 +19,78 @@ class MemberDetailScreen extends StatefulWidget {
 }
 
 class _MemberDetailScreenState extends State<MemberDetailScreen> {
-  bool loading = true;
+  bool _loading = true;
+
   String name = '';
+  String contactNumber = '';
   String plan = '';
-  DateTime? joinedAt;
-  DateTime? validUntil;
   num currentFee = 0;
   String feeStatus = '';
-  String contactNumber = '';
+  DateTime? joinedAt;
+  DateTime? validUntil;
   List<Map<String, dynamic>> recentPayments = [];
 
   @override
   void initState() {
     super.initState();
-    fetchData();
+    _fetchAll();
   }
 
-  Future<void> fetchData() async {
-    final firestore = FirebaseFirestore.instance;
-    try {
-      final userDoc =
-          await firestore.collection('users').doc(widget.uid).get();
-      final memberDoc = await firestore
-          .collection('gyms')
-          .doc(widget.gymId)
-          .collection('members')
-          .doc(widget.uid)
-          .get();
+  Future<void> _fetchAll() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
 
-      // Read from payments collection — single source of truth
-      final paymentsSnapshot = await firestore
-          .collection('gyms')
-          .doc(widget.gymId)
-          .collection('payments')
-          .where('memberId', isEqualTo: widget.uid)
-          .orderBy('timestamp', descending: true)
-          .limit(3)
-          .get();
+    final db = FirebaseFirestore.instance;
+
+    try {
+      final results = await Future.wait([
+        db.collection('users').doc(widget.uid).get(),
+        db
+            .collection('gyms')
+            .doc(widget.gymId)
+            .collection('members')
+            .doc(widget.uid)
+            .get(),
+        db
+            .collection('gyms')
+            .doc(widget.gymId)
+            .collection('payments')
+            .where('memberId', isEqualTo: widget.uid)
+            .orderBy('timestamp', descending: true)
+            .limit(3)
+            .get(),
+      ]);
+
+      if (!mounted) return;
+
+      final userDoc = results[0] as DocumentSnapshot;
+      final memberDoc = results[1] as DocumentSnapshot;
+      final paymentsSnap = results[2] as QuerySnapshot;
 
       setState(() {
-        name = userDoc.data()?['name'] ?? 'Unknown';
-        contactNumber = userDoc.data()?['contactNumber'] ?? '--';
-        plan = memberDoc.data()?['plan'] ?? 'free';
-        currentFee = memberDoc.data()?['currentFee'] ?? 0;
-        feeStatus = memberDoc.data()?['feeStatus'] ?? 'unpaid';
-        joinedAt =
-            (memberDoc.data()?['createdAt'] as Timestamp?)?.toDate();
-        validUntil =
-            (memberDoc.data()?['validUntil'] as Timestamp?)?.toDate();
-        recentPayments = paymentsSnapshot.docs.map((doc) => doc.data()).toList();
-        loading = false;
+        name = userDoc.data() != null
+            ? (userDoc.data() as Map)['name'] ?? 'Unknown'
+            : 'Unknown';
+        contactNumber = userDoc.data() != null
+            ? (userDoc.data() as Map)['contactNumber'] ?? '--'
+            : '--';
+
+        final md = memberDoc.data() as Map<String, dynamic>?;
+        plan = md?['plan'] ?? 'free';
+        currentFee = md?['currentFee'] ?? 0;
+        feeStatus = md?['feeStatus'] ?? 'unpaid';
+        joinedAt = (md?['createdAt'] as Timestamp?)?.toDate();
+        validUntil = (md?['validUntil'] as Timestamp?)?.toDate();
+
+        recentPayments = paymentsSnap.docs
+            .map((d) => d.data() as Map<String, dynamic>)
+            .toList();
+
+        _loading = false;
       });
     } catch (e) {
-      setState(() => loading = false);
-      debugPrint('Member fetch error: $e');
+      debugPrint('MemberDetail fetch error: $e');
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -80,218 +98,536 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text("MEMBER PROFILE",
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      // ── SKELETON vs real content ──────────────────────────────────────
-      body: loading
-          ? const MemberDetailSkeleton() // ← skeleton while loading
-          : _buildContent(),
+      body: _loading ? const MemberDetailSkeleton() : _buildContent(),
     );
   }
 
+  // ── Main content ─────────────────────────────────────────────────────
   Widget _buildContent() {
-    bool isPaid = feeStatus.toLowerCase() == 'paid';
+    final isPaid = feeStatus.toLowerCase() == 'paid';
+    final statusColor = isPaid ? Colors.greenAccent : Colors.redAccent;
 
-    return SingleChildScrollView(
-      // padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
+    return CustomScrollView(
+      slivers: [
+        // ── Sticky hero header ───────────────────────────────
+        SliverAppBar(
+          expandedHeight: 260,
+          pinned: true,
+          backgroundColor: Colors.black,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: statusColor.withOpacity(0.4)),
+              ),
+              child: Text(
+                feeStatus.toUpperCase(),
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ],
+          flexibleSpace: FlexibleSpaceBar(
+            collapseMode: CollapseMode.parallax,
+            background: _buildHeroHeader(isPaid, statusColor),
+          ),
+        ),
+
+        // ── Body ─────────────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+
+              // ── Quick stats row ──────────────────────────
+              _buildStatsRow(),
+              const SizedBox(height: 24),
+
+              // ── Action buttons ───────────────────────────
+              _buildActionRow(),
+              const SizedBox(height: 28),
+
+              // ── Quick nav cards ──────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _quickNavCard(
+                        icon: Icons.calendar_today_rounded,
+                        label: "Attendance",
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AttendanceScreen(
+                                uid: widget.uid, gymId: widget.gymId),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _quickNavCard(
+                        icon: Icons.account_balance_wallet_rounded,
+                        label: "Payments",
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PaymentHistoryScreen(
+                                uid: widget.uid, gymId: widget.gymId),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _quickNavCard(
+                        icon: Icons.payments_rounded,
+                        label: "Record",
+                        accent: Colors.greenAccent,
+                        onTap: _showRecordPaymentSheet,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Membership details ───────────────────────
+              _buildMembershipSection(),
+              const SizedBox(height: 28),
+
+              // ── Recent transactions ──────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader("RECENT TRANSACTIONS"),
+                    const SizedBox(height: 12),
+                    if (recentPayments.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(16),
+                          border:
+                              Border.all(color: Colors.white.withOpacity(0.06)),
+                        ),
+                        child: Column(
+                          children: const [
+                            Icon(Icons.receipt_long_rounded,
+                                color: Colors.white24, size: 32),
+                            SizedBox(height: 8),
+                            Text("No transactions yet",
+                                style: TextStyle(
+                                    color: Colors.white38, fontSize: 12)),
+                          ],
+                        ),
+                      )
+                    else
+                      ...recentPayments.map((p) => _paymentTile(p)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 48),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Hero header (SliverAppBar background) ────────────────────────────
+  Widget _buildHeroHeader(bool isPaid, Color statusColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black,
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withOpacity(0.06)),
+        ),
+      ),
+      child: Stack(
         children: [
-          const SizedBox(height: 10),
-          _buildProfileHeader(isPaid),
-          const SizedBox(height: 25),
-          _buildActionRow(),
-          const SizedBox(height: 30),
-          _buildNavigationTile("Attendance History",
-              Icons.calendar_today_rounded, () {
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => AttendanceScreen(
-                        uid: widget.uid, gymId: widget.gymId)));
-          }),
-          _buildNavigationTile(
-              "Payment History", Icons.account_balance_wallet_rounded, () {
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => PaymentHistoryScreen(
-                        uid: widget.uid, gymId: widget.gymId)));
-          }),
-          const SizedBox(height: 12),
-          // ── Record Payment ────────────────────────────────
-          _buildRecordPaymentTile(),
-          const SizedBox(height: 25),
-          _buildSubscriptionCard(),
-          const SizedBox(height: 30),
-          _sectionHeader("RECENT TRANSACTIONS"),
-          const SizedBox(height: 12),
-          if (recentPayments.isEmpty)
-            const Center(
-                child: Text("No records found",
-                    style:
-                        TextStyle(color: Colors.white24, fontSize: 12)))
-          else
-            ...recentPayments.map((p) => _paymentTile(p)),
-          const SizedBox(height: 40),
+          // Subtle glow behind avatar
+          Positioned(
+            top: 40,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.yellowAccent.withOpacity(0.08),
+                      blurRadius: 60,
+                      spreadRadius: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Content
+          Positioned.fill(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 40),
+
+                // Avatar
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.yellowAccent.withOpacity(0.08),
+                        border: Border.all(
+                            color: Colors.yellowAccent.withOpacity(0.25),
+                            width: 2),
+                      ),
+                      child: Center(
+                        child: Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                              fontSize: 36,
+                              color: Colors.yellowAccent,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                          color: Colors.black, shape: BoxShape.circle),
+                      child: Icon(
+                        isPaid
+                            ? Icons.check_circle_rounded
+                            : Icons.cancel_rounded,
+                        color: statusColor,
+                        size: 22,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Name
+                Text(name,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+
+                // Contact
+                if (contactNumber != '--')
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.phone_rounded,
+                          color: Colors.white38, size: 12),
+                      const SizedBox(width: 4),
+                      Text(contactNumber,
+                          style: const TextStyle(
+                              color: Colors.white38, fontSize: 12)),
+                    ],
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildProfileHeader(bool isPaid) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.bottomRight,
-          children: [
-            CircleAvatar(
-              radius: 55,
-              backgroundColor: Colors.yellowAccent.withOpacity(0.1),
-              child: Text(
-                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                style: const TextStyle(
-                    fontSize: 45,
-                    color: Colors.yellowAccent,
-                    fontWeight: FontWeight.bold),
+  // ── Stats row ────────────────────────────────────────────────────────
+  Widget _buildStatsRow() {
+    final daysLeft = validUntil != null
+        ? validUntil!.difference(DateTime.now()).inDays
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              _statCell("PLAN", plan.isEmpty ? '--' : plan),
+              _verticalDivider(),
+              _statCell("FEE", "Rs $currentFee"),
+              _verticalDivider(),
+              _statCell(
+                "EXPIRES",
+                daysLeft == null
+                    ? '--'
+                    : daysLeft < 0
+                        ? 'Expired'
+                        : '$daysLeft days',
+                valueColor: daysLeft != null && daysLeft <= 5
+                    ? Colors.redAccent
+                    : daysLeft != null && daysLeft <= 10
+                        ? Colors.orangeAccent
+                        : Colors.white,
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statCell(String label, String value, {Color? valueColor}) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1)),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  color: valueColor ?? Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _verticalDivider() {
+    return Container(
+      width: 1,
+      color: Colors.white.withOpacity(0.08),
+    );
+  }
+
+  // ── Action row ───────────────────────────────────────────────────────
+  Widget _buildActionRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: _actionButton(
+              icon: Icons.phone_rounded,
+              label: "Call",
+              color: Colors.yellowAccent,
+              onTap: _makeCall,
             ),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                  color: Colors.black, shape: BoxShape.circle),
-              child: Icon(
-                isPaid ? Icons.check_circle : Icons.error,
-                color: isPaid ? Colors.greenAccent : Colors.redAccent,
-                size: 28,
-              ),
-            )
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _actionButton(
+              icon: Icons.chat_rounded,
+              label: "WhatsApp",
+              color: Colors.greenAccent,
+              onTap: _sendWhatsApp,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 8),
+            Text(label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
           ],
         ),
-        const SizedBox(height: 15),
-        Text(name,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: isPaid
-                ? Colors.greenAccent.withOpacity(0.1)
-                : Colors.redAccent.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: isPaid
-                    ? Colors.greenAccent.withOpacity(0.5)
-                    : Colors.redAccent.withOpacity(0.5)),
-          ),
-          child: Text(
-            feeStatus.toUpperCase(),
-            style: TextStyle(
-              color: isPaid ? Colors.greenAccent : Colors.redAccent,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.1,
+      ),
+    );
+  }
+
+  // ── Quick nav card ───────────────────────────────────────────────────
+  Widget _quickNavCard({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color accent = Colors.yellowAccent,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: accent.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: accent, size: 22),
+            const SizedBox(height: 6),
+            Text(label,
+                style: TextStyle(
+                    color: accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Membership section ───────────────────────────────────────────────
+  Widget _buildMembershipSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader("MEMBERSHIP DETAILS"),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Column(
+              children: [
+                _membershipRow(
+                  icon: Icons.fitness_center_rounded,
+                  label: "Plan Type",
+                  value: plan,
+                  iconColor: Colors.yellowAccent,
+                  onTap: () => _navigateToEdit("plan", plan),
+                  showDivider: true,
+                ),
+                _membershipRow(
+                  icon: Icons.currency_rupee_rounded,
+                  label: "Fees Amount",
+                  value: "Rs $currentFee",
+                  iconColor: Colors.orangeAccent,
+                  onTap: () => _navigateToEdit("fee", currentFee.toString()),
+                  showDivider: true,
+                ),
+                _membershipRow(
+                  icon: Icons.calendar_month_rounded,
+                  label: "Valid Until",
+                  value: validUntil != null
+                      ? DateFormat('dd MMM yyyy').format(validUntil!)
+                      : "--",
+                  iconColor: Colors.yellowAccent,
+                  onTap: () =>
+                      _navigateToEdit("validity", validUntil.toString()),
+                  showDivider: joinedAt != null,
+                ),
+                if (joinedAt != null)
+                  _membershipRow(
+                    icon: Icons.person_add_alt_1_rounded,
+                    label: "Member Since",
+                    value: DateFormat('dd MMM yyyy').format(joinedAt!),
+                    iconColor: Colors.white38,
+                    onTap: null,
+                    showDivider: false,
+                  ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildActionRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _actionCircle(
-            Icons.phone_rounded, "Call", Colors.blue, _makeCall),
-        const SizedBox(width: 40),
-        _actionCircle(Icons.chat_bubble_rounded, "WhatsApp",
-            Colors.greenAccent, _sendWhatsApp),
-      ],
-    );
-  }
-
-  Widget _actionCircle(
-      IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _membershipRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color iconColor,
+    required VoidCallback? onTap,
+    required bool showDivider,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withOpacity(0.1),
-              border: Border.all(color: color.withOpacity(0.2)),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: iconColor, size: 18),
+                const SizedBox(width: 14),
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 13)),
+                const Spacer(),
+                Text(value,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13)),
+                if (onTap != null) ...[
+                  const SizedBox(width: 10),
+                  const Icon(Icons.edit_rounded,
+                      color: Colors.white24, size: 12),
+                ],
+              ],
             ),
-            child: Icon(icon, color: color, size: 24),
           ),
-          const SizedBox(height: 8),
-          Text(label,
-              style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          if (showDivider)
+            Divider(
+                height: 1,
+                color: Colors.white.withOpacity(0.06),
+                indent: 48,
+                endIndent: 16),
         ],
       ),
-    );
-  }
-
-  Widget _buildNavigationTile(
-      String title, IconData icon, VoidCallback onTap) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        onTap: onTap,
-        tileColor: Colors.white.withOpacity(0.04),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Colors.white10)),
-        leading: Icon(icon, color: Colors.yellowAccent, size: 22),
-        title: Text(title,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500)),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded,
-            color: Colors.white24, size: 14),
-      ),
-    );
-  }
-
-  Widget _buildSubscriptionCard() {
-    return Column(
-      children: [
-        _sectionHeader("MEMBERSHIP DETAILS"),
-        const SizedBox(height: 12),
-        _membershipListTile(Icons.fitness_center_rounded, "Plan Type",
-            plan, Colors.blueAccent,
-            () => _navigateToEdit("plan", plan)),
-        _membershipListTile(Icons.currency_rupee_rounded, "Fees Amount",
-            "Rs $currentFee", Colors.orangeAccent,
-            () => _navigateToEdit("fee", currentFee.toString())),
-        _membershipListTile(
-          Icons.calendar_month_rounded,
-          "Valid Until",
-          validUntil != null
-              ? DateFormat('dd MMM yyyy').format(validUntil!)
-              : "--",
-          Colors.purpleAccent,
-          () => _navigateToEdit("validity", validUntil.toString()),
-        ),
-      ],
     );
   }
 
@@ -306,54 +642,21 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
           currentValue: currentValue,
         ),
       ),
-    ).then((_) => fetchData());
+    ).then((_) => _fetchAll());
   }
 
-  Widget _membershipListTile(IconData icon, String label, String value,
-      Color accentColor, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: accentColor, size: 22),
-            const SizedBox(width: 15),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 14)),
-            const Spacer(),
-            Text(value,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 10),
-            const Icon(Icons.arrow_forward_ios,
-                color: Colors.white24, size: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
+  // ── Payment tile ─────────────────────────────────────────────────────
   Widget _paymentTile(Map<String, dynamic> p) {
     final amount = p['amount'] ?? 0;
     final method = (p['method'] ?? 'cash').toString().toUpperCase();
-    final plan = p['plan'] ?? 'Monthly';
+    final tilePlan = p['plan'] ?? 'Monthly';
     final markedBy = p['markedBy'] ?? 'owner';
     final ts = p['timestamp'] as Timestamp?;
     final date = ts != null
         ? DateFormat('dd MMM yyyy').format(ts.toDate())
         : '--';
 
-    // Badge color per method
-    final Color methodColor;
+    Color methodColor;
     switch ((p['method'] ?? '').toString().toLowerCase()) {
       case 'easypaisa':
         methodColor = Colors.greenAccent;
@@ -362,10 +665,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         methodColor = Colors.redAccent;
         break;
       default:
-        methodColor = Colors.blueAccent;
+        methodColor = Colors.yellowAccent;
     }
 
-    // Who recorded it
     String recordedBy;
     if (markedBy == 'online') {
       recordedBy = 'Online payment';
@@ -377,29 +679,34 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.greenAccent.withOpacity(0.1),
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: Colors.greenAccent.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
             child: const Icon(Icons.done_rounded,
-                color: Colors.greenAccent, size: 16),
+                color: Colors.greenAccent, size: 14),
           ),
-          const SizedBox(width: 15),
+          const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(plan,
+                Text(tilePlan,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
                 Text(recordedBy,
                     style: const TextStyle(
                         color: Colors.white38, fontSize: 11)),
@@ -413,28 +720,30 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 14)),
+                      fontSize: 13)),
+              const SizedBox(height: 5),
               Row(
                 children: [
                   Container(
-                    margin: const EdgeInsets.only(top: 4),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
+                        horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: methodColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
+                      color: methodColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(5),
                     ),
                     child: Text(method,
                         style: TextStyle(
                             color: methodColor,
                             fontSize: 9,
-                            fontWeight: FontWeight.bold)),
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5)),
                   ),
+                  const SizedBox(width: 6),
+                  Text(date,
+                      style: const TextStyle(
+                          color: Colors.white24, fontSize: 10)),
                 ],
               ),
-              Text(date,
-                  style: const TextStyle(
-                      color: Colors.white24, fontSize: 10)),
             ],
           ),
         ],
@@ -442,36 +751,31 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
-  // ── Record Payment tile ──────────────────────────────────────────────
-  Widget _buildRecordPaymentTile() {
-    return GestureDetector(
-      onTap: _showRecordPaymentSheet,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 0),
-        child: ListTile(
-          tileColor: Colors.greenAccent.withOpacity(0.06),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.greenAccent.withOpacity(0.2))),
-          leading: const Icon(Icons.payments_rounded,
-              color: Colors.greenAccent, size: 22),
-          title: const Text("Record Payment",
-              style: TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600)),
-          subtitle: const Text("Mark fees as paid & log transaction",
-              style: TextStyle(color: Colors.white38, fontSize: 11)),
-          trailing: const Icon(Icons.arrow_forward_ios_rounded,
-              color: Colors.greenAccent, size: 14),
+  // ── Section header ───────────────────────────────────────────────────
+  Widget _sectionHeader(String title) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 14,
+          decoration: BoxDecoration(
+            color: Colors.yellowAccent,
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-      ),
+        const SizedBox(width: 8),
+        Text(title,
+            style: const TextStyle(
+                color: Colors.yellowAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1)),
+      ],
     );
   }
 
-  // ── Record Payment bottom sheet ──────────────────────────────────────
+  // ── Record Payment sheet ─────────────────────────────────────────────
   void _showRecordPaymentSheet() {
-    // Local state inside the sheet
     String selectedMethod = 'cash';
     final txnController = TextEditingController();
     bool isSaving = false;
@@ -487,9 +791,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
               padding: EdgeInsets.only(
                   bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF121212),
+                  color: Color(0xFF111111),
                   borderRadius:
                       BorderRadius.vertical(top: Radius.circular(28)),
                 ),
@@ -497,7 +801,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Handle
                     Center(
                       child: Container(
                         width: 40,
@@ -508,30 +811,36 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-
-                    // Header
                     Row(
                       children: [
-                        const Icon(Icons.payments_rounded,
-                            color: Colors.greenAccent, size: 20),
-                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.greenAccent.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.payments_rounded,
+                              color: Colors.greenAccent, size: 18),
+                        ),
+                        const SizedBox(width: 12),
                         const Text("RECORD PAYMENT",
                             style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 15,
+                                fontSize: 14,
                                 letterSpacing: 1)),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "$name  ·  $plan  ·  Rs $currentFee",
-                      style: const TextStyle(
-                          color: Colors.white38, fontSize: 12),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Text(
+                        "$name  ·  $plan  ·  Rs $currentFee",
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 12),
+                      ),
                     ),
                     const SizedBox(height: 24),
-
-                    // Payment method selector
                     const Text("PAYMENT METHOD",
                         style: TextStyle(
                             color: Colors.white38,
@@ -541,19 +850,26 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        _methodChip("cash", "💵 Cash",
-                            selectedMethod, (v) => setSheetState(() => selectedMethod = v)),
-                        const SizedBox(width: 10),
-                        _methodChip("easypaisa", "🟢 Easypaisa",
-                            selectedMethod, (v) => setSheetState(() => selectedMethod = v)),
-                        const SizedBox(width: 10),
-                        _methodChip("jazzcash", "🔴 JazzCash",
-                            selectedMethod, (v) => setSheetState(() => selectedMethod = v)),
+                        _methodChip("cash", "💵 Cash", selectedMethod,
+                            (v) => setSheetState(
+                                () => selectedMethod = v)),
+                        const SizedBox(width: 8),
+                        _methodChip(
+                            "easypaisa",
+                            "🟢 Easypaisa",
+                            selectedMethod,
+                            (v) => setSheetState(
+                                () => selectedMethod = v)),
+                        const SizedBox(width: 8),
+                        _methodChip(
+                            "jazzcash",
+                            "🔴 JazzCash",
+                            selectedMethod,
+                            (v) => setSheetState(
+                                () => selectedMethod = v)),
                       ],
                     ),
                     const SizedBox(height: 20),
-
-                    // Transaction ID (optional for cash, required for others)
                     TextField(
                       controller: txnController,
                       style: const TextStyle(color: Colors.white),
@@ -564,8 +880,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         labelStyle:
                             const TextStyle(color: Colors.white38),
                         hintText: "e.g. TXN-123456",
-                        hintStyle:
-                            const TextStyle(color: Colors.white24, fontSize: 12),
+                        hintStyle: const TextStyle(
+                            color: Colors.white24, fontSize: 12),
                         prefixIcon: const Icon(Icons.tag_rounded,
                             color: Colors.white38, size: 18),
                         filled: true,
@@ -583,8 +899,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-
-                    // Confirm button
                     SizedBox(
                       width: double.infinity,
                       height: 54,
@@ -599,19 +913,17 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         onPressed: isSaving
                             ? null
                             : () async {
-                                // Validate txn ID for online methods
                                 if (selectedMethod != 'cash' &&
                                     txnController.text.trim().isEmpty) {
                                   ScaffoldMessenger.of(context)
                                       .showSnackBar(const SnackBar(
                                     content: Text(
-                                        "Transaction ID is required for online payments"),
+                                        "Transaction ID required for online payments"),
                                     backgroundColor: Colors.redAccent,
                                     behavior: SnackBarBehavior.floating,
                                   ));
                                   return;
                                 }
-
                                 setSheetState(() => isSaving = true);
                                 await _recordPayment(
                                   method: selectedMethod,
@@ -626,8 +938,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                                 width: 22,
                                 height: 22,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.black))
+                                    strokeWidth: 2, color: Colors.black))
                             : Text(
                                 "CONFIRM  ·  Rs $currentFee",
                                 style: const TextStyle(
@@ -650,33 +961,37 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   Widget _methodChip(String value, String label, String selected,
       ValueChanged<String> onSelect) {
     final bool isSelected = selected == value;
-    return GestureDetector(
-      onTap: () => onSelect(value),
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.greenAccent.withOpacity(0.15)
-              : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: isSelected
-                  ? Colors.greenAccent.withOpacity(0.6)
-                  : Colors.white12),
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onSelect(value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.greenAccent.withOpacity(0.12)
+                : Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: isSelected
+                    ? Colors.greenAccent.withOpacity(0.5)
+                    : Colors.white12),
+          ),
+          child: Center(
+            child: Text(label,
+                style: TextStyle(
+                    color:
+                        isSelected ? Colors.greenAccent : Colors.white54,
+                    fontSize: 11,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal)),
+          ),
         ),
-        child: Text(label,
-            style: TextStyle(
-                color: isSelected ? Colors.greenAccent : Colors.white54,
-                fontSize: 12,
-                fontWeight: isSelected
-                    ? FontWeight.bold
-                    : FontWeight.normal)),
       ),
     );
   }
 
-  // ── Core Firestore write ─────────────────────────────────────────────
+  // ── Firestore write ──────────────────────────────────────────────────
   Future<void> _recordPayment({
     required String method,
     required String txnId,
@@ -685,19 +1000,21 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       final now = DateTime.now();
       final nowTs = Timestamp.fromDate(now);
 
-      // Calculate new validUntil from today based on plan
       int months = 1;
       if (plan == '6 Months') months = 6;
       if (plan == 'Yearly') months = 12;
-      final newValidUntil =
-          Timestamp.fromDate(DateTime(now.year, now.month + months, now.day));
+
+      final newValidUntil = Timestamp.fromDate(
+          DateTime(now.year, now.month + months, now.day));
 
       final db = FirebaseFirestore.instance;
       final batch = db.batch();
 
-      // 1. gyms/{gymId}/payments/{auto}
-      final payRef =
-          db.collection('gyms').doc(widget.gymId).collection('payments').doc();
+      final payRef = db
+          .collection('gyms')
+          .doc(widget.gymId)
+          .collection('payments')
+          .doc();
       batch.set(payRef, {
         'memberId': widget.uid,
         'amount': currentFee,
@@ -715,7 +1032,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         'markedBy': 'owner',
       });
 
-      // 2. gyms/{gymId}/members/{uid}
       final memberRef = db
           .collection('gyms')
           .doc(widget.gymId)
@@ -728,9 +1044,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       });
 
       await batch.commit();
-
-
-      await fetchData();
+      await _fetchAll();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -751,43 +1065,21 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     }
   }
 
-  Widget _sectionHeader(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(title,
-          style: const TextStyle(
-              color: Colors.yellowAccent,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0)),
-    );
-  }
-
-
-  void _makeCall() async {
-    if (contactNumber.isNotEmpty) {
-      final Uri url = Uri.parse("tel:$contactNumber");
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
+  // ── Contact helpers ──────────────────────────────────────────────────
+  Future<void> _makeCall() async {
+    if (contactNumber == '--' || contactNumber.isEmpty) return;
+    final uri = Uri.parse("tel:$contactNumber");
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
-  void _sendWhatsApp() async {
-  if (contactNumber.isNotEmpty) {
-    String cleanNumber = contactNumber.replaceAll(RegExp(r'[^0-9]'), '');
-    final Uri url = Uri.parse("https://wa.me/$cleanNumber");
-    
-    if (await canLaunchUrl(url)) {
-      await launchUrl(
-        url, 
-        mode: LaunchMode.externalApplication, 
-      );
-    } else {
-      print("Could not launch WhatsApp for $url");
+  Future<void> _sendWhatsApp() async {
+    if (contactNumber == '--' || contactNumber.isEmpty) return;
+    final clean = contactNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.parse("https://wa.me/$clean");
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
-}
-
-
 }

@@ -1,121 +1,11 @@
-// import 'package:flutter/material.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:intl/intl.dart';
-// import '../user/screens/skeleton_loaders.dart'; // ← NEW
-
-// class PaymentHistoryScreen extends StatelessWidget {
-//   final String uid;
-//   final String gymId;
-
-//   const PaymentHistoryScreen(
-//       {super.key, required this.uid, required this.gymId});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Colors.black,
-//       appBar: AppBar(
-//         backgroundColor: Colors.black,
-//         title: const Text("PAYMENT HISTORY",
-//             style: TextStyle(color: Colors.white, fontSize: 16)),
-//         leading: IconButton(
-//           icon: const Icon(Icons.arrow_back_ios_new,
-//               color: Colors.white, size: 20),
-//           onPressed: () => Navigator.pop(context),
-//         ),
-//       ),
-//       body: StreamBuilder<QuerySnapshot>(
-//         stream: FirebaseFirestore.instance
-//             .collection('gyms')
-//             .doc(gymId)
-//             .collection('payments')
-//             .where('memberId', isEqualTo: uid)
-//             .orderBy('timestamp', descending: true)
-//             .snapshots(),
-//         builder: (context, snapshot) {
-//           // ── SKELETON while waiting ──────────────────────────────────
-//           if (snapshot.connectionState == ConnectionState.waiting) {
-//             return const PaymentHistorySkeleton(); // ← skeleton
-//           }
-
-//           if (snapshot.hasError ||
-//               !snapshot.hasData ||
-//               snapshot.data!.docs.isEmpty) {
-//             return _buildEmptyState(
-//                 Icons.history, "No payment history found");
-//           }
-
-//           final docs = snapshot.data!.docs;
-
-//           return ListView.builder(
-//             padding: const EdgeInsets.all(20),
-//             itemCount: docs.length,
-//             itemBuilder: (context, index) {
-//               final data =
-//                   docs[index].data() as Map<String, dynamic>;
-//               final ts = data['timestamp'] as Timestamp?;
-//               final date = ts?.toDate() ?? DateTime.now();
-
-//               return Container(
-//                 margin: const EdgeInsets.only(bottom: 12),
-//                 padding: const EdgeInsets.all(15),
-//                 decoration: BoxDecoration(
-//                   color: Colors.white.withOpacity(0.05),
-//                   borderRadius: BorderRadius.circular(15),
-//                 ),
-//                 child: Row(
-//                   children: [
-//                     Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         Text("Rs ${data['amount']}",
-//                             style: const TextStyle(
-//                                 color: Colors.white,
-//                                 fontWeight: FontWeight.bold,
-//                                 fontSize: 18)),
-//                         Text(
-//                             DateFormat('dd MMM yyyy').format(date),
-//                             style: const TextStyle(
-//                                 color: Colors.white38, fontSize: 12)),
-//                       ],
-//                     ),
-//                     const Spacer(),
-//                     Text(data['method'] ?? "Cash",
-//                         style: const TextStyle(
-//                             color: Colors.yellowAccent, fontSize: 12)),
-//                   ],
-//                 ),
-//               );
-//             },
-//           );
-//         },
-//       ),
-//     );
-//   }
-
-//   Widget _buildEmptyState(IconData icon, String message) {
-//     return Center(
-//       child: Column(
-//         mainAxisAlignment: MainAxisAlignment.center,
-//         children: [
-//           Icon(icon, color: Colors.white10, size: 60),
-//           const SizedBox(height: 15),
-//           Text(message,
-//               style: const TextStyle(
-//                   color: Colors.white38, fontSize: 14)),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/skeleton_loaders.dart';
 
-class PaymentHistoryScreen extends StatelessWidget {
+const _kPageSize = 10;
+
+class PaymentHistoryScreen extends StatefulWidget {
   final String uid;
   final String gymId;
 
@@ -123,55 +13,127 @@ class PaymentHistoryScreen extends StatelessWidget {
       {super.key, required this.uid, required this.gymId});
 
   @override
+  State<PaymentHistoryScreen> createState() => _PaymentHistoryScreenState();
+}
+
+class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
+  final List<Map<String, dynamic>> _records = [];
+  DocumentSnapshot? _lastDoc;
+  bool _loading = false;
+  bool _initialLoad = true;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPage();
+  }
+
+  Future<void> _fetchPage() async {
+    if (_loading || !_hasMore) return;
+    setState(() => _loading = true);
+
+    Query q = FirebaseFirestore.instance
+        .collection('gyms')
+        .doc(widget.gymId)
+        .collection('payments')
+        .where('memberId', isEqualTo: widget.uid)
+        .orderBy('timestamp', descending: true)
+        .limit(_kPageSize);
+
+    if (_lastDoc != null) q = q.startAfterDocument(_lastDoc!);
+
+    final snap = await q.get();
+    if (!mounted) return;
+
+    if (snap.docs.isEmpty) {
+      setState(() {
+        _hasMore = false;
+        _loading = false;
+        _initialLoad = false;
+      });
+      return;
+    }
+
+    _lastDoc = snap.docs.last;
+    setState(() {
+      _records.addAll(
+          snap.docs.map((d) => d.data() as Map<String, dynamic>));
+      _hasMore = snap.docs.length == _kPageSize;
+      _loading = false;
+      _initialLoad = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: const Text("PAYMENT HISTORY",
-            style: TextStyle(color: Colors.white, fontSize: 14,
-                fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        elevation: 0,
+        title: const Text(
+          "PAYMENT HISTORY",
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
               color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('gyms')
-            .doc(gymId)
-            .collection('payments')
-            .where('memberId', isEqualTo: uid)
-            .orderBy('timestamp', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const PaymentHistorySkeleton();
-          }
-
-          if (snapshot.hasError ||
-              !snapshot.hasData ||
-              snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState(Icons.history, "No payment history found");
-          }
-
-          final docs = snapshot.data!.docs;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              return _OwnerPaymentCard(data: data);
-            },
-          );
-        },
-      ),
+      body: _initialLoad
+          ? const PaymentHistorySkeleton()
+          : _records.isEmpty
+              ? _emptyState(Icons.history, "No payment history found")
+              : ListView.builder(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _records.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index < _records.length) {
+                      return _OwnerPaymentCard(data: _records[index]);
+                    }
+                    // Footer
+                    if (_loading) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                                color: Colors.yellowAccent,
+                                strokeWidth: 2),
+                          ),
+                        ),
+                      );
+                    }
+                    if (!_hasMore) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Center(
+                          child: Text("No more records",
+                              style: TextStyle(
+                                  color: Colors.white24, fontSize: 12)),
+                        ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: _LoadMoreButton(onTap: _fetchPage),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 
-  Widget _buildEmptyState(IconData icon, String message) {
+  Widget _emptyState(IconData icon, String message) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -179,13 +141,56 @@ class PaymentHistoryScreen extends StatelessWidget {
           Icon(icon, color: Colors.white10, size: 60),
           const SizedBox(height: 15),
           Text(message,
-              style: const TextStyle(color: Colors.white38, fontSize: 14)),
+              style:
+                  const TextStyle(color: Colors.white38, fontSize: 14)),
         ],
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Load More Button
+// ─────────────────────────────────────────────────────────────
+class _LoadMoreButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LoadMoreButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 28, vertical: 11),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(30),
+          border:
+              Border.all(color: Colors.yellowAccent.withOpacity(0.4)),
+          color: Colors.yellowAccent.withOpacity(0.06),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.expand_more_rounded,
+                color: Colors.yellowAccent, size: 18),
+            SizedBox(width: 6),
+            Text("Load more",
+                style: TextStyle(
+                    color: Colors.yellowAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Payment Card (owner view)
+// ─────────────────────────────────────────────────────────────
 class _OwnerPaymentCard extends StatelessWidget {
   final Map<String, dynamic> data;
   const _OwnerPaymentCard({required this.data});
@@ -195,14 +200,13 @@ class _OwnerPaymentCard extends StatelessWidget {
     final amount = (data['amount'] as num?)?.toDouble() ?? 0;
     final method = (data['method'] ?? 'cash').toString().toLowerCase();
     final plan = data['plan'] ?? 'Monthly';
-    final status = (data['status'] ?? 'completed').toString().toLowerCase();
+    final status =
+        (data['status'] ?? 'completed').toString().toLowerCase();
     final ts = data['timestamp'] as Timestamp?;
-    final date = ts != null
-        ? DateFormat('dd MMM yyyy').format(ts.toDate())
-        : '--';
-    final time = ts != null
-        ? DateFormat('hh:mm a').format(ts.toDate())
-        : '';
+    final date =
+        ts != null ? DateFormat('dd MMM yyyy').format(ts.toDate()) : '--';
+    final time =
+        ts != null ? DateFormat('hh:mm a').format(ts.toDate()) : '';
     final validUntil = data['validUntil'] as Timestamp?;
     final validStr = validUntil != null
         ? DateFormat('dd MMM yyyy').format(validUntil.toDate())
@@ -214,6 +218,7 @@ class _OwnerPaymentCard extends StatelessWidget {
     final screenshotUrl =
         (data['screenshot'] ?? data['screenshotUrl'] ?? '') as String;
 
+    // Status colour
     Color statusColor;
     switch (status) {
       case 'completed':
@@ -229,6 +234,7 @@ class _OwnerPaymentCard extends StatelessWidget {
         statusColor = Colors.white38;
     }
 
+    // Method colour & label
     Color methodColor;
     String methodLabel;
     switch (method) {
@@ -249,7 +255,8 @@ class _OwnerPaymentCard extends StatelessWidget {
     if (markedBy == 'online') {
       recordedBy = 'Online payment';
     } else if (markedBy == 'staff') {
-      recordedBy = 'Staff${staffName.isNotEmpty ? ' · $staffName' : ''}';
+      recordedBy =
+          'Staff${staffName.isNotEmpty ? ' · $staffName' : ''}';
     } else {
       recordedBy = 'Owner';
     }
@@ -264,7 +271,7 @@ class _OwnerPaymentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Top row ────────────────────────────────────────
+          // ── Top row ─────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
@@ -290,36 +297,9 @@ class _OwnerPaymentCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                            color: statusColor.withOpacity(0.3)),
-                      ),
-                      child: Text(status.toUpperCase(),
-                          style: TextStyle(
-                              color: statusColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.8)),
-                    ),
+                    _badge(status.toUpperCase(), statusColor),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: methodColor.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(methodLabel,
-                          style: TextStyle(
-                              color: methodColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold)),
-                    ),
+                    _badge(methodLabel, methodColor),
                   ],
                 ),
               ],
@@ -344,12 +324,12 @@ class _OwnerPaymentCard extends StatelessWidget {
             ),
           ),
 
-          // ── Screenshot ──────────────────────────────────────
+          // ── Screenshot button (lazy) ─────────────────────────
           if (screenshotUrl.isNotEmpty) ...[
             const SizedBox(height: 10),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ScreenshotThumbnail(url: screenshotUrl),
+              child: _ViewScreenshotButton(url: screenshotUrl),
             ),
           ],
 
@@ -359,13 +339,32 @@ class _OwnerPaymentCard extends StatelessWidget {
     );
   }
 
+  Widget _badge(String label, Color color) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.8)),
+    );
+  }
+
   Widget _row(String label, String value, Color valueColor) {
     return Row(
       children: [
         SizedBox(
           width: 90,
           child: Text("$label:",
-              style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              style:
+                  const TextStyle(color: Colors.white38, fontSize: 11)),
         ),
         Expanded(
           child: Text(value,
@@ -380,11 +379,14 @@ class _OwnerPaymentCard extends StatelessWidget {
   }
 }
 
-class _ScreenshotThumbnail extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────
+//  Lazy "View Screenshot" button — shared by both files
+// ─────────────────────────────────────────────────────────────
+class _ViewScreenshotButton extends StatelessWidget {
   final String url;
-  const _ScreenshotThumbnail({required this.url});
+  const _ViewScreenshotButton({required this.url});
 
-  void _view(BuildContext context) {
+  void _open(BuildContext context) {
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -399,7 +401,7 @@ class _ScreenshotThumbnail extends StatelessWidget {
                 loadingBuilder: (_, child, progress) => progress == null
                     ? child
                     : const SizedBox(
-                        height: 200,
+                        height: 260,
                         child: Center(
                           child: CircularProgressIndicator(
                               color: Colors.yellowAccent),
@@ -422,7 +424,8 @@ class _ScreenshotThumbnail extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: const BoxDecoration(
-                      color: Colors.black54, shape: BoxShape.circle),
+                      color: Colors.black54,
+                      shape: BoxShape.circle),
                   child: const Icon(Icons.close,
                       color: Colors.white, size: 20),
                 ),
@@ -437,48 +440,30 @@ class _ScreenshotThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => _view(context),
+      onTap: () => _open(context),
       child: Container(
-        height: 100,
+        width: double.infinity,
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white10),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: Colors.yellowAccent.withOpacity(0.25)),
+          color: Colors.yellowAccent.withOpacity(0.05),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                url,
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : const Center(
-                        child: CircularProgressIndicator(
-                            color: Colors.yellowAccent, strokeWidth: 2)),
-                errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image,
-                        color: Colors.white24, size: 28)),
-              ),
-              Container(
-                color: Colors.black.withOpacity(0.35),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.zoom_in_rounded,
-                        color: Colors.white70, size: 16),
-                    SizedBox(width: 6),
-                    Text("Payment screenshot",
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_search_rounded,
+                color: Colors.yellowAccent, size: 16),
+            SizedBox(width: 8),
+            Text("View Payment Screenshot",
+                style: TextStyle(
+                    color: Colors.yellowAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3)),
+          ],
         ),
       ),
     );
