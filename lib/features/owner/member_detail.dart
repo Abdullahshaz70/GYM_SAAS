@@ -20,6 +20,7 @@ class MemberDetailScreen extends StatefulWidget {
 
 class _MemberDetailScreenState extends State<MemberDetailScreen> {
   bool _loading = true;
+  bool _isDeleted = false;
 
   String name = '';
   String contactNumber = '';
@@ -67,15 +68,26 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       final memberDoc = results[1] as DocumentSnapshot;
       final paymentsSnap = results[2] as QuerySnapshot;
 
-      setState(() {
-        name = userDoc.data() != null
-            ? (userDoc.data() as Map)['name'] ?? 'Unknown'
-            : 'Unknown';
-        contactNumber = userDoc.data() != null
-            ? (userDoc.data() as Map)['contactNumber'] ?? '--'
-            : '--';
+      final md = memberDoc.data() as Map<String, dynamic>?;
+      final deleted = md?['isDeleted'] == true;
 
-        final md = memberDoc.data() as Map<String, dynamic>?;
+      setState(() {
+        _isDeleted = deleted;
+
+        // For deleted members, use the preserved gym subcollection name
+        // since users/{uid} has been anonymized to "Deleted Member"
+        if (deleted) {
+          name = md?['name'] ?? 'Former Member';
+          contactNumber = md?['contactNumber'] ?? '--';
+        } else {
+          name = userDoc.data() != null
+              ? (userDoc.data() as Map)['name'] ?? 'Unknown'
+              : 'Unknown';
+          contactNumber = userDoc.data() != null
+              ? (userDoc.data() as Map)['contactNumber'] ?? '--'
+              : '--';
+        }
+
         plan = md?['plan'] ?? 'free';
         currentFee = md?['currentFee'] ?? 0;
         feeStatus = md?['feeStatus'] ?? 'unpaid';
@@ -151,15 +163,42 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         SliverToBoxAdapter(
           child: Column(
             children: [
+              // ── Former member banner ─────────────────────
+              if (_isDeleted)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  color: Colors.white.withOpacity(0.05),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.person_off_rounded,
+                          color: Colors.white38, size: 16),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'This member has deleted their account. Records are preserved for your reference.',
+                          style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 12,
+                              height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               const SizedBox(height: 8),
 
               // ── Quick stats row ──────────────────────────
               _buildStatsRow(),
               const SizedBox(height: 24),
 
-              // ── Action buttons ───────────────────────────
-              _buildActionRow(),
-              const SizedBox(height: 28),
+              // ── Action buttons (hidden for deleted members) ──
+              if (!_isDeleted) ...[
+                _buildActionRow(),
+                const SizedBox(height: 28),
+              ],
 
               // ── Quick nav cards ──────────────────────────
               Padding(
@@ -193,15 +232,18 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _quickNavCard(
-                        icon: Icons.payments_rounded,
-                        label: "Record",
-                        accent: Colors.greenAccent,
-                        onTap: _showRecordPaymentSheet,
+                    // Record payment only available for active members
+                    if (!_isDeleted) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _quickNavCard(
+                          icon: Icons.payments_rounded,
+                          label: "Record",
+                          accent: Colors.greenAccent,
+                          onTap: _showRecordPaymentSheet,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),

@@ -16,6 +16,7 @@ class MemberTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDeleted = member['isDeleted'] == true;
     final status =
         (member['feeStatus'] ?? 'unpaid').toString().toLowerCase();
     final statusColor = switch (status) {
@@ -24,63 +25,94 @@ class MemberTile extends StatelessWidget {
       _ => Colors.redAccent,
     };
 
-    return GestureDetector(
-      // ✅ null disables tap entirely in read-only mode
-      onTap: isReadOnly
-          ? null
-          : () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MemberDetailScreen(
-                    uid: member['uid'] ?? '',
-                    gymId: gymId,
-                  ),
-                ),
-              ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        decoration: BoxDecoration(
-          // Slightly dimmer in read-only to hint non-interactivity
-          color: isReadOnly
-              ? Colors.white.withOpacity(0.02)
-              : Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
-        ),
-        child: Row(
-          children: [
-            _Avatar(name: member['name'] ?? 'G', statusColor: statusColor),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    member['name'] ?? 'New Member',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
+    return Opacity(
+      opacity: isDeleted ? 0.55 : 1.0,
+      child: GestureDetector(
+        // Deleted members are still tappable so the owner can view history
+        onTap: isReadOnly
+            ? null
+            : () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MemberDetailScreen(
+                      uid: member['uid'] ?? '',
+                      gymId: gymId,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    member['plan'] ?? 'Monthly',
-                    style: const TextStyle(
-                        color: Colors.white38, fontSize: 12),
-                  ),
-                ],
-              ),
+                ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: isReadOnly
+                ? Colors.white.withOpacity(0.02)
+                : Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDeleted
+                  ? Colors.white.withOpacity(0.04)
+                  : Colors.white.withOpacity(0.06),
             ),
-            _StatusBadge(status: status, color: statusColor),
-            const SizedBox(width: 6),
-            // Hide chevron in read-only — nothing to navigate to
-            if (!isReadOnly)
-              const Icon(Icons.chevron_right_rounded,
-                  color: Colors.white24, size: 18),
-          ],
+          ),
+          child: Row(
+            children: [
+              _Avatar(
+                name: member['name'] ?? 'G',
+                statusColor: isDeleted ? Colors.white24 : statusColor,
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      member['name'] ?? 'New Member',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isDeleted ? Colors.white54 : Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        decoration: isDeleted
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                        decorationColor: Colors.white38,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      member['plan'] ?? 'Monthly',
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (isDeleted)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'FORMER',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                )
+              else
+                _StatusBadge(status: status, color: statusColor),
+              const SizedBox(width: 6),
+              if (!isReadOnly)
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white24, size: 18),
+            ],
+          ),
         ),
       ),
     );

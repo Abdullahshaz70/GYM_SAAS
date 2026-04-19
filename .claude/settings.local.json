@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(find lib *)",
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(ls \"D:/OWN THINGS/saas/\"*.rules)",
+      "Bash(firebase deploy *)",
+      "Bash(flutter devices *)",
+      "Bash(flutter run *)",
+      "Bash(node seed_dummy_data.js)",
+      "Bash(firebase login:list)",
+      "Bash(gcloud auth *)",
+      "Read(//c/Users/Dell/AppData/Roaming/firebase/**)",
+      "Read(//c/Users/Dell/AppData/Roaming/**)",
+      "Bash(firebase --version)",
+      "Bash(firebase login:ci --no-localhost)",
+      "Read(//c/Users/Dell/AppData/Local/firebase/**)",
+      "Read(//c/Users/Dell/AppData/**)",
+      "Bash(node -e ' *)",
+      "Bash(node *)"
+    ]
+  }
+}

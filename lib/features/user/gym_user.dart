@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 import 'services/firestore_service.dart';
+import 'services/account_deletion_service.dart';
 import 'screens/attendance_calendar.dart';
 import '../../shared/skeleton_loaders.dart';
 import 'screens/pay_fee_screen.dart';
@@ -43,9 +44,10 @@ class _GymUserState extends State<GymUser> {
 
   DateTime    _focusedDay   = DateTime.now();
   DateTime    _selectedDay  = DateTime.now();
-  Set<String> _presentDates = {};
+  Set<DateTime> _presentDates = {};
 
   bool _isLoggingOut = false;
+  bool _isDeletingAccount = false;
 
   // ─── Computed helpers ───────────────────────────────────────────────────
   bool get _isLocked   => _gymStatus?.access == GymAccessLevel.locked;
@@ -179,15 +181,27 @@ class _GymUserState extends State<GymUser> {
     });
   }
 
+  // Future<void> _markAttendance() async {
+  //   final now = DateTime.now();
+  //   final key = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  //   if (_presentDates.contains(key)) {
+  //     _showSnackBar('Already checked in today', Colors.orange);
+  //     return;
+  //   }
+  //   await _fs.markAttendance(_gymId, _user.uid);
+  //   setState(() => _presentDates.add(key));
+  //   _showSnackBar('Attendance marked', Colors.green);
+  // }
+
   Future<void> _markAttendance() async {
     final now = DateTime.now();
-    final key = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    if (_presentDates.contains(key)) {
+    final today = DateTime(now.year, now.month, now.day);
+    if (_presentDates.contains(today)) {
       _showSnackBar('Already checked in today', Colors.orange);
       return;
     }
     await _fs.markAttendance(_gymId, _user.uid);
-    setState(() => _presentDates.add(key));
+    setState(() => _presentDates.add(today));
     _showSnackBar('Attendance marked', Colors.green);
   }
 
@@ -256,6 +270,164 @@ class _GymUserState extends State<GymUser> {
     }
   }
 
+
+  Future<void> _initiateDeleteAccount() async {
+    if (_isDeletingAccount) return;
+
+    if (_gymId.isEmpty) {
+      _showSnackBar('Gym data not loaded. Pull down to refresh.', Colors.orange);
+      return;
+    }
+
+    // Step 1: Initial warning
+    final step1 = await showConfirmDialog(
+      context: context,
+      title: 'Delete Account',
+      message:
+          'This will permanently delete your account and anonymize your personal '
+          'data. Your attendance and payment history will remain for gym records, '
+          'but your name and contact info will be removed. This cannot be undone.',
+      confirmLabel: 'Continue',
+      isDestructive: true,
+    );
+    if (!step1 || !mounted) return;
+
+    // Step 2: Check for outstanding fees
+    final svc = AccountDeletionService();
+    String feeStatus = 'unknown';
+    try {
+      feeStatus = await svc.getMemberFeeStatus(_gymId, _user.uid) ?? 'unknown';
+    } catch (_) {
+      _showSnackBar('Could not verify fee status. Try again.', Colors.redAccent);
+      return;
+    }
+
+    final hasOutstandingFees = feeStatus == 'unpaid' || feeStatus == 'pending';
+
+    if (hasOutstandingFees && mounted) {
+      final step2 = await showConfirmDialog(
+        context: context,
+        title: 'Outstanding Fees',
+        message:
+            'You have $feeStatus fees. Your gym owner will be notified about '
+            'this deletion. Do you still want to proceed?',
+        confirmLabel: 'Delete Anyway',
+        isDestructive: true,
+      );
+      if (!step2 || !mounted) return;
+    }
+
+    // Step 3: Password confirmation — re-authenticates BEFORE any Firestore writes.
+    // This guarantees the Firebase Auth session is fresh, so currentUser.delete()
+    // never throws requires-recent-login and the email is always freed up.
+    if (!mounted) return;
+    final reauthed = await _showPasswordConfirmDialog(svc);
+    if (!reauthed || !mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+
+    try {
+      await svc.deleteMemberAccount(
+        gymId: _gymId,
+        uid: _user.uid,
+        memberName: _userName,
+        feeStatus: feeStatus,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const Login()),
+          (_) => false,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showSnackBar('Account deletion failed. Please try again.', Colors.redAccent);
+      }
+    } finally {
+      if (mounted) setState(() => _isDeletingAccount = false);
+    }
+  }
+
+  /// Shows a password entry dialog, re-authenticates, and returns true on success.
+  Future<bool> _showPasswordConfirmDialog(AccountDeletionService svc) async {
+    final passCtrl = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Confirm Your Identity',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter your password to permanently delete your account.',
+              style: TextStyle(color: Colors.white60, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                labelStyle: TextStyle(color: Colors.white38),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white38),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.redAccent),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Confirm Delete',
+              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return false;
+
+    try {
+      await svc.reauthenticate(
+        email: _user.email ?? '',
+        password: passCtrl.text,
+      );
+      return true;
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        final msg = e.code == 'wrong-password' || e.code == 'invalid-credential'
+            ? 'Incorrect password.'
+            : 'Authentication failed. Please try again.';
+        _showSnackBar(msg, Colors.redAccent);
+      }
+      return false;
+    } catch (_) {
+      if (mounted) {
+        _showSnackBar('Authentication failed. Please try again.', Colors.redAccent);
+      }
+      return false;
+    }
+  }
 
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -373,6 +545,22 @@ class _GymUserState extends State<GymUser> {
                       onDaySelected: (day) =>
                           setState(() => _selectedDay = _focusedDay = day),
                     ),
+                    const SizedBox(height: 12),
+                    _isDeletingAccount
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator(
+                                  color: Colors.redAccent),
+                            ),
+                          )
+                        : _NavItem(
+                            icon: Icons.delete_forever_rounded,
+                            iconColor: Colors.redAccent,
+                            label: 'Delete Account',
+                            subtitle: 'Permanently remove your account',
+                            onTap: _initiateDeleteAccount,
+                          ),
                   ],
                 ),
               ),
@@ -898,7 +1086,7 @@ class _CalendarSection extends StatelessWidget {
     required this.onDaySelected,
   });
   final DateTime          focusedDay, selectedDay;
-  final Set<String>       presentDates;
+  final Set<DateTime>       presentDates;
   final ValueChanged<DateTime> onDaySelected;
 
   @override

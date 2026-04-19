@@ -4,7 +4,7 @@ import 'package:table_calendar/table_calendar.dart';
 class AttendanceCalendar extends StatelessWidget {
   final DateTime focusedDay;
   final DateTime selectedDay;
-  final Set<String> presentDates;
+  final Set<DateTime> presentDates;
   final ValueChanged<DateTime> onDaySelected;
 
   const AttendanceCalendar({
@@ -15,11 +15,14 @@ class AttendanceCalendar extends StatelessWidget {
     required this.onDaySelected,
   });
 
-  String _formatDate(DateTime d) {
-    return "${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}";
-  }
+  // String _formatDate(DateTime d) {
+  //   return "${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}";
+  // }
+  //
+  // bool _isPresent(DateTime day) => presentDates.contains(_formatDate(day));
 
-  bool _isPresent(DateTime day) => presentDates.contains(_formatDate(day));
+  bool _isPresent(DateTime day) =>
+    presentDates.contains(DateTime(day.year, day.month, day.day));
 
   @override
   Widget build(BuildContext context) {

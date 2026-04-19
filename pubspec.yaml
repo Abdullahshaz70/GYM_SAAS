@@ -50,6 +50,7 @@ dependencies:
   printing: ^5.14.3
   path_provider: ^2.1.5
   open_file: ^3.5.11
+  firebase_messaging: ^16.1.0
 
 dev_dependencies:
   flutter_test:

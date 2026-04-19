@@ -69,13 +69,17 @@ class _RegisterState extends State<Register> {
     throw 'This gym is currently not accepting new digital registrations.';
   }
 
-  // 2️⃣ Check if user already exists
+  // 2️⃣ Check if user already exists (ignore soft-deleted accounts)
   final userCheck = await firestore
       .collection('users')
       .where('email', isEqualTo: email)
       .get();
 
-  if (userCheck.docs.isNotEmpty) {
+  final activeUsers = userCheck.docs
+      .where((doc) => doc.data()['isDeleted'] != true)
+      .toList();
+
+  if (activeUsers.isNotEmpty) {
     throw 'This email is already registered.';
   }
 

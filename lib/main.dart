@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'auth/register.dart';
-import 'features/owner/gym_owner_screen.dart';
 import 'auth/login.dart';
 import 'firebase_options.dart';
 import 'auth/auth_wrapper.dart';
-import 'package:flutter/foundation.dart';
 
 void main() async {
-
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
 
   runApp(const MyApp());
 }
@@ -182,4 +184,4 @@ class MyApp extends StatelessWidget {
 //       ),
 //     );
 //   }
-// }
+// } 

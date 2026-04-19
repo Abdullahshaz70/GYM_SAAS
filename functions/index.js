@@ -44,3 +44,65 @@ exports.rotateAttendanceQrDaily = functions.pubsub
   });
 
 
+// -----------------------
+// 2️⃣ Notify owner via FCM when a member deletes their account with unpaid fees
+// -----------------------
+exports.notifyOwnerOnMemberDeletion = functions.firestore
+  .document("gyms/{gymId}/notifications/{notifId}")
+  .onCreate(async (snap, context) => {
+    const db = admin.firestore();
+    const { gymId } = context.params;
+    const notifData = snap.data();
+
+    if (notifData.type !== "member_deleted_unpaid") return null;
+
+    try {
+      // Fetch the gym to get ownerUid
+      const gymDoc = await db.collection("gyms").doc(gymId).get();
+      if (!gymDoc.exists) {
+        console.error(`Gym ${gymId} not found`);
+        return null;
+      }
+      const ownerUid = gymDoc.data().ownerUid;
+      if (!ownerUid) {
+        console.error(`No ownerUid on gym ${gymId}`);
+        return null;
+      }
+
+      // Fetch owner's FCM token
+      const ownerDoc = await db.collection("users").doc(ownerUid).get();
+      if (!ownerDoc.exists) {
+        console.error(`Owner user doc ${ownerUid} not found`);
+        return null;
+      }
+      const fcmToken = ownerDoc.data().fcmToken;
+      if (!fcmToken) {
+        console.warn(`Owner ${ownerUid} has no FCM token — skipping push`);
+        return null;
+      }
+
+      // Send FCM push notification
+      const message = {
+        token: fcmToken,
+        notification: {
+          title: "Member Account Deleted",
+          body: notifData.message || "A member deleted their account with outstanding fees.",
+        },
+        data: {
+          type: "member_deleted_unpaid",
+          memberId: notifData.memberId || "",
+          gymId: gymId,
+        },
+        android: { priority: "high" },
+        apns: { payload: { aps: { sound: "default" } } },
+      };
+
+      await admin.messaging().send(message);
+      console.log(`FCM push sent to owner ${ownerUid} for gym ${gymId}`);
+    } catch (error) {
+      console.error("Error in notifyOwnerOnMemberDeletion:", error);
+    }
+    return null;
+  });
+
+

@@ -81,7 +81,6 @@ Future<void> _loadData() async {
 
     gymName        = gymDoc.get('gymName') ?? 'Gym';
     todayAttendance = attSnap.size;
-    totalMembers   = membersSnap.size;
 
     // Step 3: Build member list from members subcollection only — no extra user fetches
     final List<Map<String, dynamic>> loaded = [];
@@ -89,6 +88,7 @@ Future<void> _loadData() async {
 
     for (final doc in membersSnap.docs) {
       final mData = doc.data() as Map<String, dynamic>;
+      if (mData['isDeleted'] == true) continue; // skip soft-deleted members
       final status = mData['feeStatus'] ?? 'unpaid';
       if (status != 'paid') unpaid++;
       loaded.add({
@@ -100,6 +100,8 @@ Future<void> _loadData() async {
         'validUntil' : mData['validUntil'],
       });
     }
+
+    totalMembers = loaded.length;
 
     if (mounted) {
       setState(() {

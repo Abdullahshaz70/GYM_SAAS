@@ -154,7 +154,9 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
       _cashRevenue = cashRev;
       _onlineRevenue = onlineRev;
       _pendingOnlineCount = pendingCount;
-      _totalMembers = membersSnapshot.size;
+      _totalMembers = membersSnapshot.docs
+          .where((d) => (d.data() as Map<String, dynamic>)['isDeleted'] != true)
+          .length;
       _gymName = gymQuery.docs.first['gymName'] ?? 'Owner';
       _gymCode = gymQuery.docs.first['registrationCode'] ?? '';
       _loadingStats = false;
@@ -205,6 +207,20 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
       final futures = snapshot.docs.map((doc) async {
         final uid = doc.id;
         final data = doc.data() as Map<String, dynamic>;
+        final isDeleted = data['isDeleted'] == true;
+
+        // For deleted members: use the preserved gym subcollection name
+        // (users/{uid} is anonymized, but gyms/.../members/{uid} keeps the real name)
+        if (isDeleted) {
+          return {
+            'uid': uid,
+            'name': data['name'] ?? 'Former Member',
+            'plan': data['plan'] ?? 'Monthly',
+            'feeStatus': data['feeStatus'] ?? 'unpaid',
+            'validUntil': data['validUntil'],
+            'isDeleted': true,
+          };
+        }
 
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -220,6 +236,7 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
           'plan': data['plan'] ?? 'Monthly',
           'feeStatus': data['feeStatus'] ?? 'unpaid',
           'validUntil': data['validUntil'],
+          'isDeleted': false,
         };
       });
 

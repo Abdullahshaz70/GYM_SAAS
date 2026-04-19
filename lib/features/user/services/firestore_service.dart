@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:core';
+
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -19,20 +21,38 @@ class FirestoreService {
     return doc.exists ? doc.data() : null;
   }
 
-  Future<Set<String>> getAttendance(String gymId, String uid) async {
-    final snap = await _firestore
-        .collection('gyms')
-        .doc(gymId)
-        .collection('attendance')
-        .where('memberId', isEqualTo: uid)
-        .get();
 
-    return snap.docs
-        .map((doc) => (doc['timestamp'] as Timestamp).toDate())
-        .map((d) =>
-            "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}")
-        .toSet();
-  }
+  Future<Set<DateTime>> getAttendance(String gymId, String uid) async {
+  final snap = await _firestore
+      .collection('gyms')
+      .doc(gymId)
+      .collection('attendance')
+      .where('memberId', isEqualTo: uid)
+      .get();
+
+  return snap.docs
+      .where((doc) => doc.data().containsKey('timestamp'))
+      .map((doc) {
+        final ts = doc['timestamp'] as Timestamp;
+        final d = ts.toDate();
+        return DateTime(d.year, d.month, d.day); // normalize to date only
+      })
+      .toSet();
+}
+
+  // Future<Set<String>> getAttendance(String gymId, String uid) async {
+  //   final snap = await _firestore
+  //       .collection('gyms')
+  //       .doc(gymId)
+  //       .collection('attendance')
+  //       .where('memberId', isEqualTo: uid)
+  //       .get();
+
+  //   return snap.docs
+  //       .where((doc) => doc.data().containsKey('date'))
+  //       .map((doc) => doc['date'] as String)
+  //       .toSet();
+  // }
 
   Future<void> markAttendance(String gymId, String uid) async {
     await _firestore

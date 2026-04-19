@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:saas/shared/qr_scan.dart';
 import 'package:saas/features/staff/gym_staff.dart';
 import 'register.dart';
@@ -77,6 +78,12 @@ class _LoginState extends State<Login> {
     final role = data['role'] ?? 'member';
     final userGymId = data['gymId'] ?? '';
 
+    // Block soft-deleted accounts
+    if (data['isDeleted'] == true) {
+      await auth.signOut();
+      throw 'This account has been deleted. Please register a new account.';
+    }
+
     // 3️⃣ Email verification check (skip for owner)
     if (role != 'owner' && !user.emailVerified) {
       await auth.signOut();
@@ -109,6 +116,17 @@ class _LoginState extends State<Login> {
       await firestore.collection('users').doc(user.uid).update({'isVerified': true});
     }
 
+    // Save FCM token for push notifications (owners only)
+    if (role == 'owner') {
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          await firestore.collection('users').doc(user.uid).update({'fcmToken': fcmToken});
+        }
+      } catch (_) {
+        // Non-fatal: FCM token save failure should not block login
+      }
+    }
 
     if (role == 'member') {
       Navigator.pushAndRemoveUntil(
