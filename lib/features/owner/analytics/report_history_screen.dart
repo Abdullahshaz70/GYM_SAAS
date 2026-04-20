@@ -211,14 +211,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _navy     = Color(0xFF0D1B2A);
-const _navyCard = Color(0xFF112236);
-const _accent   = Color(0xFF4FC3F7);
+const _navy     = Color(0xFF000000);
+const _navyCard = Color(0xFF1A1A1A);
+const _accent   = Color(0xFFFFFF00);
 const _green    = Color(0xFF4ADE80);
 const _amber    = Color(0xFFFBBF24);
 const _rose     = Color(0xFFF87171);
 const _textPri  = Color(0xFFE2E8F0);
-const _textSec  = Color(0xFF94A3B8);
+const _textSec  = Color(0xFF9E9E9E);
 
 class ReportHistoryScreen extends StatelessWidget {
   final String gymId;
@@ -259,7 +259,7 @@ class ReportHistoryScreen extends StatelessWidget {
             return Center(child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.error_outline_rounded, color: _rose, size: 40),
+                const Icon(Icons.error_rounded, color: _rose, size: 40),
                 const SizedBox(height: 12),
                 Text('${snap.error}',
                     style: const TextStyle(color: _textSec, fontSize: 12),
@@ -296,7 +296,7 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.history_rounded, color: _textSec.withOpacity(0.25), size: 64),
+      Icon(Icons.inventory_2_rounded, color: _textSec.withOpacity(0.25), size: 64),
       const SizedBox(height: 16),
       const Text('No reports yet',
           style: TextStyle(color: _textPri, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -407,7 +407,7 @@ class _CardState extends State<_Card> {
               child: _opening
                   ? const Padding(padding: EdgeInsets.all(10),
                       child: CircularProgressIndicator(strokeWidth: 2.5, color: _accent))
-                  : const Icon(Icons.picture_as_pdf_rounded, color: _accent, size: 20),
+                  : const Icon(Icons.summarize_rounded, color: _accent, size: 20),
             ),
             const SizedBox(width: 12),
 
@@ -426,7 +426,7 @@ class _CardState extends State<_Card> {
                 border: Border.all(color: hasUrl ? _green.withOpacity(0.3) : _amber.withOpacity(0.3)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(hasUrl ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                Icon(hasUrl ? Icons.cloud_done_rounded : Icons.cloud_sync_rounded,
                     color: hasUrl ? _green : _amber, size: 11),
                 const SizedBox(width: 4),
                 Text(hasUrl ? 'OPEN' : 'NO FILE',
@@ -453,7 +453,7 @@ class _CardState extends State<_Card> {
           if (hasUrl) ...[
             const SizedBox(height: 10),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.touch_app_rounded, color: _textSec.withOpacity(0.4), size: 13),
+              Icon(Icons.open_in_new_rounded, color: _textSec.withOpacity(0.4), size: 13),
               const SizedBox(width: 4),
               Text('Tap to open PDF', style: TextStyle(color: _textSec.withOpacity(0.4), fontSize: 10)),
             ]),

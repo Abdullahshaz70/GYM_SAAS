@@ -583,7 +583,7 @@
 //           child: Column(
 //             mainAxisSize: MainAxisSize.min,
 //             children: [
-//               const Icon(Icons.error_outline_rounded, color: _rose, size: 48),
+//               const Icon(Icons.error_rounded, color: _rose, size: 48),
 //               const SizedBox(height: 16),
 //               Text('Failed to load analytics',
 //                   style: const TextStyle(
@@ -1211,7 +1211,7 @@
 //               borderRadius: BorderRadius.circular(8),
 //             ),
 //             child: Icon(
-//               isOnline ? Icons.mobile_friendly : Icons.money_rounded,
+//               isOnline ? Icons.contactless_rounded : Icons.account_balance_rounded,
 //               color: methodColor,
 //               size: 18,
 //             ),
@@ -1568,7 +1568,7 @@
 // //       ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(color: _accent, strokeWidth: 2), SizedBox(height: 14), Text('Loading…', style: TextStyle(color: _textSec))]))
 // //       : _error != null
 // //         ? Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
-// //             const Icon(Icons.error_outline_rounded, color: _rose, size: 48), const SizedBox(height: 14),
+// //             const Icon(Icons.error_rounded, color: _rose, size: 48), const SizedBox(height: 14),
 // //             const Text('Failed to load', style: TextStyle(color: _textPri, fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
 // //             Text(_error!, style: const TextStyle(color: _textSec, fontSize: 12), textAlign: TextAlign.center), const SizedBox(height: 20),
 // //             TextButton(onPressed: _load, child: const Text('RETRY', style: TextStyle(color: _accent))),
@@ -1900,15 +1900,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'report_history_screen.dart';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
-const _navy     = Color(0xFF0D1B2A);
-const _navyCard = Color(0xFF112236);
-const _slate    = Color(0xFF1E3A5F);
-const _accent   = Color(0xFF4FC3F7); // ice-blue
+const _navy     = Color(0xFF000000);
+const _navyCard = Color(0xFF1A1A1A);
+const _slate    = Color(0xFF2A2A2A);
+const _accent   = Color(0xFFFFFF00);
 const _green    = Color(0xFF4ADE80);
 const _amber    = Color(0xFFFBBF24);
 const _rose     = Color(0xFFF87171);
 const _textPri  = Color(0xFFE2E8F0);
-const _textSec  = Color(0xFF94A3B8);
+const _textSec  = Color(0xFF9E9E9E);
 
 // ─── Model ───────────────────────────────────────────────────────────────────
 class _AnalyticsData {
@@ -2462,7 +2462,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
           // History
           IconButton(
             tooltip: 'Report History',
-            icon: const Icon(Icons.history_rounded, color: _textSec),
+            icon: const Icon(Icons.manage_history_rounded, color: _textSec),
             onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -2475,7 +2475,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
               : IconButton(
                   tooltip: 'Export & Upload PDF',
                   icon: const Icon(
-                      Icons.picture_as_pdf_rounded, color: _accent),
+                      Icons.summarize_rounded, color: _accent),
                   onPressed: _generatePdf,
                 ),
           const SizedBox(width: 6),
@@ -2547,7 +2547,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: _rose, size: 48),
+              const Icon(Icons.error_rounded, color: _rose, size: 48),
               const SizedBox(height: 16),
               const Text('Failed to load analytics',
                   style: TextStyle(
@@ -2616,14 +2616,14 @@ class _OverviewTab extends StatelessWidget {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  _KpiCard(label: 'Total Revenue',  value: 'Rs ${_fmt(data.totalRevenue)}',  icon: Icons.payments_rounded,      color: _green),
-                  _KpiCard(label: 'Cash In',        value: 'Rs ${_fmt(data.cashRevenue)}',   icon: Icons.money_rounded,         color: _amber),
-                  _KpiCard(label: 'Online In',      value: 'Rs ${_fmt(data.onlineRevenue)}', icon: Icons.mobile_friendly,       color: _accent),
-                  _KpiCard(label: 'Total Members',  value: '${data.totalMembers}',           icon: Icons.people_alt_rounded,    color: const Color(0xFFA78BFA)),
-                  _KpiCard(label: 'Active Members', value: '${data.activeMembers}',          icon: Icons.verified_user_rounded, color: _green),
-                  _KpiCard(label: 'Overdue Fees',   value: '${data.overdueMembers}',         icon: Icons.warning_amber_rounded, color: _rose),
-                  _KpiCard(label: 'Today Visits',   value: '${data.todayAttendance}',        icon: Icons.door_front_door_rounded, color: _accent),
-                  _KpiCard(label: 'Month Visits',   value: '${data.monthAttendance}',        icon: Icons.calendar_month_rounded,color: _amber),
+                  _KpiCard(label: 'Total Revenue',  value: 'Rs ${_fmt(data.totalRevenue)}',  icon: Icons.trending_up_rounded,   color: _green),
+                  _KpiCard(label: 'Cash In',        value: 'Rs ${_fmt(data.cashRevenue)}',   icon: Icons.account_balance_rounded, color: _amber),
+                  _KpiCard(label: 'Online In',      value: 'Rs ${_fmt(data.onlineRevenue)}', icon: Icons.contactless_rounded,   color: _accent),
+                  _KpiCard(label: 'Total Members',  value: '${data.totalMembers}',           icon: Icons.groups_rounded,        color: const Color(0xFFA78BFA)),
+                  _KpiCard(label: 'Active Members', value: '${data.activeMembers}',          icon: Icons.verified_rounded,      color: _green),
+                  _KpiCard(label: 'Overdue Fees',   value: '${data.overdueMembers}',         icon: Icons.running_with_errors_rounded, color: _rose),
+                  _KpiCard(label: 'Today Visits',   value: '${data.todayAttendance}',        icon: Icons.directions_walk_rounded, color: _accent),
+                  _KpiCard(label: 'Month Visits',   value: '${data.monthAttendance}',        icon: Icons.bar_chart_rounded,     color: _amber),
                 ],
               ),
             ),
@@ -2826,11 +2826,11 @@ class _MembersTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Expanded(child: _statBrick('Total',   '${data.totalMembers}',  _accent, Icons.people_alt_rounded)),
+            Expanded(child: _statBrick('Total',   '${data.totalMembers}',  _accent, Icons.groups_rounded)),
             const SizedBox(width: 10),
-            Expanded(child: _statBrick('Active',  '${data.activeMembers}', _green,  Icons.verified_user_rounded)),
+            Expanded(child: _statBrick('Active',  '${data.activeMembers}', _green,  Icons.verified_rounded)),
             const SizedBox(width: 10),
-            Expanded(child: _statBrick('Overdue', '${data.overdueMembers}',_rose,   Icons.warning_amber_rounded)),
+            Expanded(child: _statBrick('Overdue', '${data.overdueMembers}',_rose,   Icons.running_with_errors_rounded)),
           ]),
           const SizedBox(height: 16),
 
@@ -2903,9 +2903,9 @@ class _MembersTab extends StatelessWidget {
                         letterSpacing: 1.5)),
                 const SizedBox(height: 16),
                 Row(children: [
-                  Expanded(child: _attTile('Today',      '${data.todayAttendance}', Icons.today_rounded)),
+                  Expanded(child: _attTile('Today',      '${data.todayAttendance}', Icons.wb_sunny_rounded)),
                   const SizedBox(width: 12),
-                  Expanded(child: _attTile('This Month', '${data.monthAttendance}', Icons.calendar_today_rounded)),
+                  Expanded(child: _attTile('This Month', '${data.monthAttendance}', Icons.date_range_rounded)),
                 ]),
               ],
             ),
@@ -3239,7 +3239,7 @@ class _PaymentRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
-              isOnline ? Icons.mobile_friendly : Icons.money_rounded,
+              isOnline ? Icons.contactless_rounded : Icons.account_balance_rounded,
               color: methodColor,
               size: 18,
             ),
