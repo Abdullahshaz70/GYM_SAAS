@@ -263,12 +263,10 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
   void _applyFilter() {
     final query = _searchController.text.toLowerCase();
     _filteredMembers = _allMembers.where((m) {
-      final matchName =
-          m['name'].toString().toLowerCase().contains(query);
-      final status =
-          m['feeStatus']?.toString().toLowerCase() ?? 'unpaid';
-      final matchFilter =
-          _activeFilter == 'all' || status == _activeFilter;
+      final matchName = m['name'].toString().toLowerCase().contains(query);
+      if (m['isDeleted'] == true) return matchName; // former: search only
+      final status = m['feeStatus']?.toString().toLowerCase() ?? 'unpaid';
+      final matchFilter = _activeFilter == 'all' || status == _activeFilter;
       return matchName && matchFilter;
     }).toList();
   }
@@ -563,24 +561,30 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
               color: Colors.white70),
           onPressed: () {},
         ),
+
+        //  const SizedBox(width: 8),
+        
+        IconButton(
+          icon: const Icon(Icons.analytics_rounded, color: Colors.white70),
+          tooltip: 'Owner Analytics',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OwnerAnalyticsScreen(
+                gymId:   _gymId!,
+                gymName: _gymName ?? 'My Gym',
+              ),
+            ),
+          ),
+        ),
+              
+
         IconButton(
           icon: const Icon(Icons.menu_rounded, color: Colors.white),
           onPressed: _showActionMenu,
         ),
-        const SizedBox(width: 8),
-        IconButton(
-  icon: const Icon(Icons.analytics_rounded, color: Colors.white70),
-  tooltip: 'Owner Analytics',
-  onPressed: () => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => OwnerAnalyticsScreen(
-        gymId:   _gymId!,
-        gymName: _gymName ?? 'My Gym',
-      ),
-    ),
-  ),
-),
+       
+      
       ],
     );
   }

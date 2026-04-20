@@ -429,54 +429,35 @@ void _viewScreenshot(String url) {
             ),
           ),
 
-          // ── Screenshot preview ────────────────────────────────
+          // ── Screenshot button ─────────────────────────────────
           if (hasScreenshot) ...[
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => _viewScreenshot(payment['screenshotUrl']),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                height: 120,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    fit: StackFit.expand,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GestureDetector(
+                onTap: () => _viewScreenshot(payment['screenshotUrl']),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: Colors.yellowAccent.withOpacity(0.25)),
+                    color: Colors.yellowAccent.withOpacity(0.05),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.network(
-                        payment['screenshotUrl'],
-                        fit: BoxFit.cover,
-                        loadingBuilder: (_, child, progress) =>
-                            progress == null
-                                ? child
-                                : const Center(
-                                    child: CircularProgressIndicator(
-                                        color: Colors.yellowAccent,
-                                        strokeWidth: 2)),
-                        errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.broken_image,
-                                color: Colors.white24)),
-                      ),
-                      Container(
-                        alignment: Alignment.center,
-                        color: Colors.black.withOpacity(0.3),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                color: Colors.white, size: 18),
-                            SizedBox(width: 6),
-                            Text("Tap to view",
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
+                      Icon(Icons.image_search_rounded,
+                          color: Colors.yellowAccent, size: 16),
+                      SizedBox(width: 8),
+                      Text("View Payment Screenshot",
+                          style: TextStyle(
+                              color: Colors.yellowAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3)),
                     ],
                   ),
                 ),

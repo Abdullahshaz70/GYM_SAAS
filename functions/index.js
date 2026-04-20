@@ -4,6 +4,25 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 // -----------------------
+// 0️⃣ Initialize QR token when a new gym is created
+// -----------------------
+exports.initGymQrToken = functions.firestore
+  .document("gyms/{gymId}")
+  .onCreate(async (snap) => {
+    const now = Date.now();
+    await snap.ref.update({
+      currentAttendanceQrToken: now.toString(),
+      attendanceQrExpiresAt: admin.firestore.Timestamp.fromMillis(
+        now + 24 * 60 * 60 * 1000
+      ),
+      attendanceQrLastGeneratedAt:
+        admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`QR token initialized for gym ${snap.id}`);
+    return null;
+  });
+
+// -----------------------
 // 1️⃣ Rotate Attendance QR Daily (existing)
 // -----------------------
 exports.rotateAttendanceQrDaily = functions.pubsub

@@ -544,21 +544,31 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: accent.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: accent.withOpacity(0.2)),
+          color: accent.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: accent.withOpacity(0.18)),
         ),
         child: Column(
           children: [
-            Icon(icon, color: accent, size: 22),
-            const SizedBox(height: 6),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: accent.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: accent.withOpacity(0.2)),
+              ),
+              child: Icon(icon, color: accent, size: 20),
+            ),
+            const SizedBox(height: 9),
             Text(label,
                 style: TextStyle(
                     color: accent,
                     fontSize: 11,
-                    fontWeight: FontWeight.w600)),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2)),
           ],
         ),
       ),
@@ -640,10 +650,20 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         children: [
           Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             child: Row(
               children: [
-                Icon(icon, color: iconColor, size: 18),
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(11),
+                    border:
+                        Border.all(color: iconColor.withOpacity(0.22)),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 17),
+                ),
                 const SizedBox(width: 14),
                 Text(label,
                     style: const TextStyle(
@@ -655,9 +675,16 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         fontWeight: FontWeight.bold,
                         fontSize: 13)),
                 if (onTap != null) ...[
-                  const SizedBox(width: 10),
-                  const Icon(Icons.edit_rounded,
-                      color: Colors.white24, size: 12),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: const Icon(Icons.chevron_right_rounded,
+                        color: Colors.white38, size: 14),
+                  ),
                 ],
               ],
             ),
@@ -666,7 +693,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             Divider(
                 height: 1,
                 color: Colors.white.withOpacity(0.06),
-                indent: 48,
+                indent: 68,
                 endIndent: 16),
         ],
       ),

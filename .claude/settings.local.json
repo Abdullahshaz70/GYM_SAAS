@@ -19,7 +19,9 @@
       "Read(//c/Users/Dell/AppData/Local/firebase/**)",
       "Read(//c/Users/Dell/AppData/**)",
       "Bash(node -e ' *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(firebase firestore:get \"gyms\")",
+      "Bash(firebase firestore:databases:list)"
     ]
   }
 }

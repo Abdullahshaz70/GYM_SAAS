@@ -29,6 +29,10 @@ class _GymStaffState extends State<GymStaff> {
   int unpaidMembers = 0;
   bool _isLoggingOut = false;
   List<Map<String, dynamic>> members = [];
+  Map<String, dynamic> _permissions = {
+    'canMarkAttendance': true,
+    'canCollectFees': true,
+  };
 
   GymStatusResult? _gymStatus;
 
@@ -51,6 +55,8 @@ Future<void> _loadData() async {
     final data = userDoc.data()!;
     staffName = data['name'] ?? 'Staff';
     gymId = data['gymId'] ?? '';
+    final userPerms = data['permissions'] as Map<String, dynamic>? ??
+        {'canMarkAttendance': true, 'canCollectFees': true};
 
     if (gymId.isEmpty) {
       setState(() => _isLoading = false);
@@ -108,6 +114,7 @@ Future<void> _loadData() async {
         members        = loaded;
         unpaidMembers  = unpaid;
         _gymStatus     = statusResult;
+        _permissions   = userPerms;
         _isLoading     = false;
       });
     }
@@ -247,42 +254,62 @@ Future<void> _loadData() async {
                     ),
                     _ActionTile(
                       icon: Icons.qr_code_scanner_rounded,
-                      iconColor: Colors.yellowAccent,
+                      iconColor: _permissions['canMarkAttendance'] == true
+                          ? Colors.yellowAccent
+                          : Colors.white24,
                       label: 'Mark Attendance',
-                      subtitle: 'Show QR or check in manually',
-                      disabled: _isReadOnly,
-                      onTap: () => _requireFullAccess(() {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StaffMarkAttendance(
-                              gymId: gymId,
-                              staffName: staffName,
-                              members: members,
+                      subtitle: _permissions['canMarkAttendance'] == true
+                          ? 'Show QR or check in manually'
+                          : 'Not permitted — contact owner',
+                      disabled: _isReadOnly || _permissions['canMarkAttendance'] != true,
+                      onTap: () {
+                        if (_permissions['canMarkAttendance'] != true) {
+                          _showSnack('You don\'t have permission to mark attendance.', Colors.orangeAccent);
+                          return;
+                        }
+                        _requireFullAccess(() {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => StaffMarkAttendance(
+                                gymId: gymId,
+                                staffName: staffName,
+                                members: members,
+                              ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        });
+                      },
                     ),
                     const SizedBox(height: 8),
                     _ActionTile(
                       icon: Icons.account_balance_wallet_rounded,
-                      iconColor: Colors.yellowAccent,
+                      iconColor: _permissions['canCollectFees'] == true
+                          ? Colors.yellowAccent
+                          : Colors.white24,
                       label: 'Collect Fees',
-                      subtitle: 'Record cash payments for members',
-                      disabled: _isReadOnly,
-                      onTap: () => _requireFullAccess(() {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StaffMarkFees(
-                              gymId: gymId,
-                              staffName: staffName,
-                              members: members,
+                      subtitle: _permissions['canCollectFees'] == true
+                          ? 'Record cash payments for members'
+                          : 'Not permitted — contact owner',
+                      disabled: _isReadOnly || _permissions['canCollectFees'] != true,
+                      onTap: () {
+                        if (_permissions['canCollectFees'] != true) {
+                          _showSnack('You don\'t have permission to collect fees.', Colors.orangeAccent);
+                          return;
+                        }
+                        _requireFullAccess(() {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => StaffMarkFees(
+                                gymId: gymId,
+                                staffName: staffName,
+                                members: members,
+                              ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        });
+                      },
                     ),
                     const SizedBox(height: 20),
                     const Padding(
