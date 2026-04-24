@@ -4,11 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 import 'services/firestore_service.dart';
-import 'services/account_deletion_service.dart';
 import 'screens/attendance_calendar.dart';
 import '../../shared/skeleton_loaders.dart';
 import 'screens/pay_fee_screen.dart';
 import 'screens/user_payment_history_screen.dart';
+import 'screens/user_settings_screen.dart';
 import 'screens/payment_pending_screen.dart';
 import '../../shared/qr_scan.dart';
 import '../../auth/login.dart';
@@ -42,18 +42,14 @@ class _GymUserState extends State<GymUser> {
   String _pendingReferenceCode = '';
   double _pendingAmount        = 0;
 
-  DateTime    _focusedDay   = DateTime.now();
-  DateTime    _selectedDay  = DateTime.now();
+  DateTime      _focusedDay  = DateTime.now();
+  DateTime      _selectedDay = DateTime.now();
   Set<DateTime> _presentDates = {};
 
   bool _isLoggingOut = false;
-  bool _isDeletingAccount = false;
 
-  // ─── Computed helpers ───────────────────────────────────────────────────
   bool get _isLocked   => _gymStatus?.access == GymAccessLevel.locked;
   bool get _isReadOnly => _gymStatus?.access == GymAccessLevel.readOnly;
-  bool get _isFull     => _gymStatus?.access == GymAccessLevel.full;
-
 
   @override
   void initState() {
@@ -74,7 +70,6 @@ class _GymUserState extends State<GymUser> {
       _userName = userData['name']  ?? 'Athlete';
 
       if (_gymId.isNotEmpty) {
-        // Check gym status first
         final statusResult = await GymStatusService.checkAccess(_gymId);
 
         final memberData = await _fs.getMemberData(_gymId, _user.uid);
@@ -89,7 +84,6 @@ class _GymUserState extends State<GymUser> {
           }
         }
 
-        // Fetch gym name for locked/readonly screens
         final gymDoc = await FirebaseFirestore.instance
             .collection('gyms')
             .doc(_gymId)
@@ -155,8 +149,6 @@ class _GymUserState extends State<GymUser> {
     }
   }
 
-  // ─── Write-gated action helper ───────────────────────────────────────────
-
   void _requireFullAccess(VoidCallback action) {
     if (_isLocked) {
       _showSnackBar('Gym is unavailable. Contact your gym.', Colors.redAccent);
@@ -173,7 +165,6 @@ class _GymUserState extends State<GymUser> {
   }
 
   Future<void> _openQRScanner() async {
-    // Check-in is a write — blocked in readOnly/locked
     _requireFullAccess(() async {
       final code = await Navigator.push<String>(
           context, MaterialPageRoute(builder: (_) => const QRScannerPage()));
@@ -181,20 +172,8 @@ class _GymUserState extends State<GymUser> {
     });
   }
 
-  // Future<void> _markAttendance() async {
-  //   final now = DateTime.now();
-  //   final key = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  //   if (_presentDates.contains(key)) {
-  //     _showSnackBar('Already checked in today', Colors.orange);
-  //     return;
-  //   }
-  //   await _fs.markAttendance(_gymId, _user.uid);
-  //   setState(() => _presentDates.add(key));
-  //   _showSnackBar('Attendance marked', Colors.green);
-  // }
-
   Future<void> _markAttendance() async {
-    final now = DateTime.now();
+    final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     if (_presentDates.contains(today)) {
       _showSnackBar('Already checked in today', Colors.orange);
@@ -206,21 +185,18 @@ class _GymUserState extends State<GymUser> {
   }
 
   void _openPayFeeScreen() {
-    // Payment is a write — blocked in readOnly/locked
     _requireFullAccess(() {
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => PayFeeScreen(
-            gymId:     _gymId,
-            memberId:  _user.uid,
-            plan:      _plan,
+            gymId:      _gymId,
+            memberId:   _user.uid,
+            plan:       _plan,
             currentFee: _currentFee),
       )).then((_) => _loadUserData());
     });
   }
 
   void _openPendingScreen() {
-    // Viewing pending status is read — allowed in readOnly
-    // But cancelling/acting on it is a write — guard inside that screen
     if (_gymId.isEmpty) {
       _showSnackBar('Gym data not loaded. Pull down to refresh.', Colors.orange);
       return;
@@ -240,7 +216,7 @@ class _GymUserState extends State<GymUser> {
     )).then((_) => _loadUserData());
   }
 
-    Future<void> _logout() async {
+  Future<void> _logout() async {
     if (_isLoggingOut) return;
 
     final confirmed = await showConfirmDialog(
@@ -270,165 +246,6 @@ class _GymUserState extends State<GymUser> {
     }
   }
 
-
-  Future<void> _initiateDeleteAccount() async {
-    if (_isDeletingAccount) return;
-
-    if (_gymId.isEmpty) {
-      _showSnackBar('Gym data not loaded. Pull down to refresh.', Colors.orange);
-      return;
-    }
-
-    // Step 1: Initial warning
-    final step1 = await showConfirmDialog(
-      context: context,
-      title: 'Delete Account',
-      message:
-          'This will permanently delete your account and anonymize your personal '
-          'data. Your attendance and payment history will remain for gym records, '
-          'but your name and contact info will be removed. This cannot be undone.',
-      confirmLabel: 'Continue',
-      isDestructive: true,
-    );
-    if (!step1 || !mounted) return;
-
-    // Step 2: Check for outstanding fees
-    final svc = AccountDeletionService();
-    String feeStatus = 'unknown';
-    try {
-      feeStatus = await svc.getMemberFeeStatus(_gymId, _user.uid) ?? 'unknown';
-    } catch (_) {
-      _showSnackBar('Could not verify fee status. Try again.', Colors.redAccent);
-      return;
-    }
-
-    final hasOutstandingFees = feeStatus == 'unpaid' || feeStatus == 'pending';
-
-    if (hasOutstandingFees && mounted) {
-      final step2 = await showConfirmDialog(
-        context: context,
-        title: 'Outstanding Fees',
-        message:
-            'You have $feeStatus fees. Your gym owner will be notified about '
-            'this deletion. Do you still want to proceed?',
-        confirmLabel: 'Delete Anyway',
-        isDestructive: true,
-      );
-      if (!step2 || !mounted) return;
-    }
-
-    // Step 3: Password confirmation — re-authenticates BEFORE any Firestore writes.
-    // This guarantees the Firebase Auth session is fresh, so currentUser.delete()
-    // never throws requires-recent-login and the email is always freed up.
-    if (!mounted) return;
-    final reauthed = await _showPasswordConfirmDialog(svc);
-    if (!reauthed || !mounted) return;
-
-    setState(() => _isDeletingAccount = true);
-
-    try {
-      await svc.deleteMemberAccount(
-        gymId: _gymId,
-        uid: _user.uid,
-        memberName: _userName,
-        feeStatus: feeStatus,
-      );
-
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const Login()),
-          (_) => false,
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        _showSnackBar('Account deletion failed. Please try again.', Colors.redAccent);
-      }
-    } finally {
-      if (mounted) setState(() => _isDeletingAccount = false);
-    }
-  }
-
-  /// Shows a password entry dialog, re-authenticates, and returns true on success.
-  Future<bool> _showPasswordConfirmDialog(AccountDeletionService svc) async {
-    final passCtrl = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Confirm Your Identity',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter your password to permanently delete your account.',
-              style: TextStyle(color: Colors.white60, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passCtrl,
-              obscureText: true,
-              autofocus: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                labelStyle: TextStyle(color: Colors.white38),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white38),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.redAccent),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Confirm Delete',
-              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return false;
-
-    try {
-      await svc.reauthenticate(
-        email: _user.email ?? '',
-        password: passCtrl.text,
-      );
-      return true;
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        final msg = e.code == 'wrong-password' || e.code == 'invalid-credential'
-            ? 'Incorrect password.'
-            : 'Authentication failed. Please try again.';
-        _showSnackBar(msg, Colors.redAccent);
-      }
-      return false;
-    } catch (_) {
-      if (mounted) {
-        _showSnackBar('Authentication failed. Please try again.', Colors.redAccent);
-      }
-      return false;
-    }
-  }
-
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg,
@@ -440,18 +257,18 @@ class _GymUserState extends State<GymUser> {
     ));
   }
 
+  // ─── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    // Loading gate
     if (_isLoading || _gymStatus == null) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFF0A0A0A),
         appBar: _buildAppBar(showActions: false),
         body: const GymUserSkeleton(),
       );
     }
 
-    // Full lockout
     if (_isLocked) {
       return _LockedScreen(
         gymName:  _gymName,
@@ -461,106 +278,74 @@ class _GymUserState extends State<GymUser> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          // Read-only banner — isSaaSActive=false
-          if (_isReadOnly)
-            Container(
-              width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: Colors.orangeAccent,
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      color: Colors.black, size: 18),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Online services are disabled. Visit your gym in person.',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+          if (_isReadOnly) _ReadOnlyBanner(),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadUserData,
               color: Colors.yellowAccent,
-              backgroundColor: Colors.grey[900],
+              backgroundColor: const Color(0xFF1A1A1A),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Check-in blocked in readOnly
-                    _CheckInButton(
-                      onTap: _openQRScanner,
-                      disabled: _isReadOnly,
-                    ),
-                    const SizedBox(height: 12),
+                    // Profile header
+                    _ProfileBanner(userName: _userName, gymName: _gymName),
+                    const SizedBox(height: 20),
+
+                    // Check-in CTA
+                    _CheckInButton(onTap: _openQRScanner, disabled: _isReadOnly),
+                    const SizedBox(height: 20),
+
+                    // Membership
+                    _sectionLabel('MEMBERSHIP'),
+                    const SizedBox(height: 8),
                     _MembershipCard(
                       plan:             _plan,
                       expiryDate:       _expiryDate,
                       feeStatus:        _feeStatus,
                       isPaid:           _isPaid,
                       currentFee:       _currentFee,
-                      // Pay/pending blocked in readOnly
-                      onPayTap:     _openPayFeeScreen,
-                      onPendingTap: _openPendingScreen,
+                      onPayTap:         _openPayFeeScreen,
+                      onPendingTap:     _openPendingScreen,
                       pendingPaymentId: _pendingPaymentId,
                       isReadOnly:       _isReadOnly,
                     ),
                     const SizedBox(height: 12),
-                    _StatsRow(
-                        sessionCount: _presentDates.length, plan: _plan),
-                    const SizedBox(height: 12),
-                    // Payment history is read — always allowed
+                    _StatsRow(sessionCount: _presentDates.length, plan: _plan),
+                    const SizedBox(height: 20),
+
+                    // Quick links
+                    _sectionLabel('QUICK LINKS'),
+                    const SizedBox(height: 8),
                     _NavItem(
                       icon:      Icons.receipt_long_rounded,
                       iconColor: const Color(0xFF60a5fa),
-                      label:     'Payment history',
+                      label:     'Payment History',
                       subtitle:  'View transactions & receipts',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) =>
-                                const UserPaymentHistoryScreen()),
+                            builder: (_) => const UserPaymentHistoryScreen()),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    _CalendarSection(
+                    const SizedBox(height: 20),
+
+                    // Attendance calendar
+                    _sectionLabel('ATTENDANCE'),
+                    const SizedBox(height: 8),
+                    _CalendarCard(
                       focusedDay:    _focusedDay,
                       selectedDay:   _selectedDay,
                       presentDates:  _presentDates,
                       onDaySelected: (day) =>
                           setState(() => _selectedDay = _focusedDay = day),
                     ),
-                    const SizedBox(height: 12),
-                    _isDeletingAccount
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(16),
-                              child: CircularProgressIndicator(
-                                  color: Colors.redAccent),
-                            ),
-                          )
-                        : _NavItem(
-                            icon: Icons.delete_forever_rounded,
-                            iconColor: Colors.redAccent,
-                            label: 'Delete Account',
-                            subtitle: 'Permanently remove your account',
-                            onTap: _initiateDeleteAccount,
-                          ),
                   ],
                 ),
               ),
@@ -571,26 +356,79 @@ class _GymUserState extends State<GymUser> {
     );
   }
 
+  Widget _sectionLabel(String text) => Padding(
+    padding: const EdgeInsets.only(left: 2),
+    child: Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white38,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.8,
+      ),
+    ),
+  );
+
+  void _openMenuSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _UserMenuSheet(
+        userName:    _userName,
+        gymName:     _gymName,
+        isLoggingOut: _isLoggingOut,
+        onSettingsTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => UserSettingsScreen(
+                gymId:    _gymId,
+                userName: _userName,
+              ),
+            ),
+          );
+        },
+        onLogoutTap: () {
+          Navigator.pop(context);
+          _logout();
+        },
+      ),
+    );
+  }
+
   AppBar _buildAppBar({bool showActions = true}) => AppBar(
-    backgroundColor: Colors.black,
+    backgroundColor: const Color(0xFF0A0A0A),
     elevation: 0,
     titleSpacing: 16,
-    title: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    title: Row(
       children: [
-        const Text('Welcome back',
-            style: TextStyle(fontSize: 12, color: Colors.white54)),
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: Colors.yellowAccent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.fitness_center_rounded,
+              color: Colors.black, size: 16),
+        ),
+        const SizedBox(width: 10),
         Text(
-          _userName.toUpperCase(),
+          _gymName.isNotEmpty ? _gymName.toUpperCase() : 'GYM',
           style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
             color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
             letterSpacing: 0.5,
-            height: 1.2,
           ),
         ),
       ],
+    ),
+    bottom: PreferredSize(
+      preferredSize: const Size.fromHeight(1),
+      child: Container(
+          height: 1, color: Colors.white.withOpacity(0.05)),
     ),
     actions: showActions
         ? [
@@ -600,8 +438,8 @@ class _GymUserState extends State<GymUser> {
               onPressed: () {},
             ),
             IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Colors.white54),
-              onPressed: _logout,
+              icon: const Icon(Icons.menu_rounded, color: Colors.white70),
+              onPressed: _openMenuSheet,
             ),
             const SizedBox(width: 4),
           ]
@@ -609,11 +447,364 @@ class _GymUserState extends State<GymUser> {
   );
 }
 
+// ─── User menu sheet ─────────────────────────────────────────────────────────
+
+class _UserMenuSheet extends StatelessWidget {
+  const _UserMenuSheet({
+    required this.userName,
+    required this.gymName,
+    required this.isLoggingOut,
+    required this.onSettingsTap,
+    required this.onLogoutTap,
+  });
+
+  final String       userName, gymName;
+  final bool         isLoggingOut;
+  final VoidCallback onSettingsTap, onLogoutTap;
+
+  String get _initials {
+    final words = userName.trim().split(RegExp(r'\s+'));
+    if (words.isEmpty || words[0].isEmpty) return 'A';
+    if (words.length == 1) return words[0].substring(0, words[0].length.clamp(0, 2)).toUpperCase();
+    return '${words[0][0]}${words[1][0]}'.toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF111111),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(
+          top:   BorderSide(color: Color(0xFF1E1E1E)),
+          left:  BorderSide(color: Color(0xFF1E1E1E)),
+          right: BorderSide(color: Color(0xFF1E1E1E)),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFF222222),
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // User identity header
+          Container(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 20),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFF181818))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.yellowAccent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: Colors.yellowAccent.withOpacity(0.3), width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _initials,
+                    style: const TextStyle(
+                      color: Colors.yellowAccent,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      gymName.isNotEmpty ? '$gymName · Member' : 'Member',
+                      style: const TextStyle(
+                        color: Color(0xFF555555),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Settings
+          _SheetItem(
+            icon:      Icons.settings_rounded,
+            iconColor: Colors.white54,
+            label:     'Settings',
+            subtitle:  'Account preferences & deletion',
+            onTap:     onSettingsTap,
+          ),
+
+          const _SheetDivider(),
+
+          // Logout
+          _LogoutItem(isLoading: isLoggingOut, onTap: onLogoutTap),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Sheet item ───────────────────────────────────────────────────────────────
+
+class _SheetItem extends StatelessWidget {
+  const _SheetItem({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData     icon;
+  final Color        iconColor;
+  final String       label, subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: Color(0xFF555555), fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFF333333), size: 18),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// ─── Sheet divider ────────────────────────────────────────────────────────────
+
+class _SheetDivider extends StatelessWidget {
+  const _SheetDivider();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 1,
+    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    color: const Color(0xFF181818),
+  );
+}
+
+// ─── Sheet logout ─────────────────────────────────────────────────────────────
+
+class _LogoutItem extends StatelessWidget {
+  const _LogoutItem({required this.isLoading, required this.onTap});
+
+  final bool         isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      splashColor: Colors.redAccent.withOpacity(0.08),
+      highlightColor: Colors.redAccent.withOpacity(0.04),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.8, color: Colors.redAccent),
+                    )
+                  : const Icon(Icons.logout_rounded,
+                      color: Colors.redAccent, size: 18),
+            ),
+            const SizedBox(width: 14),
+            const Text(
+              'Log out',
+              style: TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// ─── Read-only banner ─────────────────────────────────────────────────────────
+
+class _ReadOnlyBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    color: Colors.orangeAccent,
+    child: const Row(
+      children: [
+        Icon(Icons.warning_amber_rounded, color: Colors.black, size: 18),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Online services are disabled. Visit your gym in person.',
+            style: TextStyle(
+                color: Colors.black, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ─── Profile banner ───────────────────────────────────────────────────────────
+
+class _ProfileBanner extends StatelessWidget {
+  const _ProfileBanner({required this.userName, required this.gymName});
+  final String userName, gymName;
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 54,
+        height: 54,
+        decoration: BoxDecoration(
+          color: Colors.yellowAccent.withOpacity(0.12),
+          shape: BoxShape.circle,
+          border: Border.all(
+              color: Colors.yellowAccent.withOpacity(0.35), width: 1.5),
+        ),
+        child: Center(
+          child: Text(
+            userName.isNotEmpty ? userName[0].toUpperCase() : 'A',
+            style: const TextStyle(
+              color: Colors.yellowAccent,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 14),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _greeting(),
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              userName.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+                height: 1.15,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (gymName.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      size: 11, color: Colors.white38),
+                  const SizedBox(width: 3),
+                  Expanded(
+                    child: Text(
+                      gymName,
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 11),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
 // ─── Locked screen ────────────────────────────────────────────────────────────
 
 class _LockedScreen extends StatelessWidget {
-  final String gymName;
-  final String message;
+  final String       gymName, message;
   final VoidCallback onLogout;
 
   const _LockedScreen({
@@ -623,87 +814,79 @@ class _LockedScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: Text(
-          gymName.toUpperCase(),
-          style: const TextStyle(
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFF0A0A0A),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFF0A0A0A),
+      elevation: 0,
+      title: Text(
+        gymName.toUpperCase(),
+        style: const TextStyle(
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: onLogout,
-            child: const Text('Logout',
-                style: TextStyle(color: Colors.redAccent)),
-          ),
-          const SizedBox(width: 8),
-        ],
+            letterSpacing: 1.5),
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(36),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.lock_outline_rounded,
-                    color: Colors.redAccent, size: 40),
+      actions: [
+        TextButton(
+          onPressed: onLogout,
+          child: const Text('Logout',
+              style: TextStyle(color: Colors.redAccent)),
+        ),
+        const SizedBox(width: 8),
+      ],
+    ),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(height: 28),
-              const Text(
-                'Gym Unavailable',
+              child: const Icon(Icons.lock_outline_rounded,
+                  color: Colors.redAccent, size: 40),
+            ),
+            const SizedBox(height: 28),
+            const Text('Gym Unavailable',
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                message,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text(message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: Colors.white54, fontSize: 14, height: 1.6),
+                    color: Colors.white54, fontSize: 14, height: 1.6)),
+            const SizedBox(height: 12),
+            const Text(
+              'Please contact your gym for more information.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 36),
+            OutlinedButton(
+              onPressed: onLogout,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.redAccent),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Please contact your gym for more information.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white38, fontSize: 13, height: 1.5),
-              ),
-              const SizedBox(height: 36),
-              OutlinedButton(
-                onPressed: onLogout,
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.redAccent),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 32, vertical: 14),
-                ),
-                child: const Text('Log Out',
-                    style: TextStyle(color: Colors.redAccent)),
-              ),
-            ],
-          ),
+              child: const Text('Log Out',
+                  style: TextStyle(color: Colors.redAccent)),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ─── Check-in button ──────────────────────────────────────────────────────────
@@ -711,42 +894,75 @@ class _LockedScreen extends StatelessWidget {
 class _CheckInButton extends StatelessWidget {
   const _CheckInButton({required this.onTap, this.disabled = false});
   final VoidCallback onTap;
-  final bool disabled;
+  final bool         disabled;
 
   @override
-  Widget build(BuildContext context) => Opacity(
-    opacity: disabled ? 0.4 : 1.0,
-    child: Material(
-      color: disabled ? Colors.grey[800] : Colors.yellowAccent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        // null onTap prevents the ripple and tap in disabled state
-        onTap: disabled ? null : onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.qr_code_scanner_rounded,
-                  size: 20,
-                  color: disabled ? Colors.white38 : Colors.black),
-              const SizedBox(width: 10),
-              Text(
-                disabled ? 'CHECK-IN UNAVAILABLE' : 'CHECK IN',
-                style: TextStyle(
-                  color: disabled ? Colors.white38 : Colors.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
+  Widget build(BuildContext context) {
+    final bgColor =
+        disabled ? const Color(0xFF1C1C1C) : Colors.yellowAccent;
+    final fgColor = disabled ? Colors.white24 : Colors.black;
+
+    return Opacity(
+      opacity: disabled ? 0.6 : 1.0,
+      child: Material(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: disabled ? null : onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: disabled
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.black.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.qr_code_scanner_rounded,
+                      size: 22, color: fgColor),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        disabled ? 'CHECK-IN UNAVAILABLE' : 'CHECK IN TODAY',
+                        style: TextStyle(
+                          color: fgColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        disabled
+                            ? 'Online services are disabled'
+                            : 'Scan the QR code at the entrance',
+                        style: TextStyle(
+                          color: disabled
+                              ? Colors.white24
+                              : Colors.black.withOpacity(0.5),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.arrow_forward_ios_rounded, size: 14, color: fgColor),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 // ─── Membership card ──────────────────────────────────────────────────────────
@@ -775,16 +991,20 @@ class _MembershipCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color statusColor;
     final Color statusBg;
+    final Color accentColor;
     switch (feeStatus.toLowerCase()) {
       case 'paid':
         statusColor = const Color(0xFF4ade80);
         statusBg    = const Color(0xFF4ade80).withOpacity(0.1);
+        accentColor = const Color(0xFF4ade80);
       case 'pending':
         statusColor = const Color(0xFFFFB300);
         statusBg    = const Color(0xFFFFB300).withOpacity(0.1);
+        accentColor = const Color(0xFFFFB300);
       default:
         statusColor = const Color(0xFFf87171);
         statusBg    = const Color(0xFFf87171).withOpacity(0.1);
+        accentColor = const Color(0xFFf87171);
     }
 
     return Container(
@@ -793,78 +1013,114 @@ class _MembershipCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
+      child: Column(
+        children: [
+          // Accent strip
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [accentColor, accentColor.withOpacity(0)],
+              ),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('CURRENT PLAN',
+                          style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 10,
+                              letterSpacing: 1.2)),
+                      const SizedBox(height: 6),
+                      Text(plan,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded,
+                              size: 11, color: Colors.white38),
+                          const SizedBox(width: 4),
+                          Text('Expires $expiryDate',
+                              style: const TextStyle(
+                                  color: Colors.white38, fontSize: 12)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(99)),
+                  child: Text(feeStatus.toUpperCase(),
+                      style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8)),
+                ),
+              ],
+            ),
+          ),
+
+          // Divider + fee + action
+          Container(
+            margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            height: 1,
+            color: Colors.white.withOpacity(0.05),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+            child: Row(
+              children: [
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Current plan',
+                    const Text('FEE',
                         style: TextStyle(
                             color: Colors.white38,
-                            fontSize: 11,
-                            letterSpacing: 0.5)),
+                            fontSize: 10,
+                            letterSpacing: 1.2)),
                     const SizedBox(height: 4),
-                    Text(plan,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 6),
-                    Text('Expires $expiryDate',
-                        style: const TextStyle(
-                            color: Colors.white38, fontSize: 12)),
+                    Text(
+                      'Rs ${currentFee.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700),
+                    ),
                   ],
                 ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                    color: statusBg,
-                    borderRadius: BorderRadius.circular(99)),
-                child: Text(feeStatus.toUpperCase(),
-                    style: TextStyle(
-                        color: statusColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5)),
-              ),
-            ],
+                const Spacer(),
+                _buildAction(),
+              ],
+            ),
           ),
-        ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-          decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFF1A1A1A)))),
-          child: Row(children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Monthly fee',
-                  style: TextStyle(color: Colors.white38, fontSize: 11)),
-              const SizedBox(height: 3),
-              Text('Rs ${currentFee.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700)),
-            ]),
-            const Spacer(),
-            _buildAction(),
-          ]),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 
   Widget _buildAction() {
-    // In read-only mode hide pay/pending actions — show disabled message
     if (isReadOnly) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.orangeAccent.withOpacity(0.1),
           borderRadius: BorderRadius.circular(10),
@@ -907,8 +1163,7 @@ class _MembershipCard extends StatelessWidget {
           return GestureDetector(
             onTap: onPendingTap,
             child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.refresh_rounded,
-                  size: 15, color: Color(0xFFFFB300)),
+              Icon(Icons.refresh_rounded, size: 15, color: Color(0xFFFFB300)),
               SizedBox(width: 5),
               Text('Retry',
                   style: TextStyle(
@@ -971,46 +1226,72 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
     Expanded(
-        child: _StatCard(
-            label: 'Sessions this month',
-            value: '$sessionCount',
-            sub:   'total check-ins')),
-    const SizedBox(width: 8),
+      child: _StatCard(
+        icon:  Icons.fitness_center_rounded,
+        iconColor: Colors.yellowAccent,
+        label: 'This Month',
+        value: '$sessionCount',
+        sub:   'check-ins',
+      ),
+    ),
+    const SizedBox(width: 10),
     Expanded(
-        child: _StatCard(
-            label: 'Plan',
-            value: plan,
-            sub:   'active membership')),
+      child: _StatCard(
+        icon:  Icons.card_membership_rounded,
+        iconColor: const Color(0xFF60a5fa),
+        label: 'Active Plan',
+        value: plan,
+        sub:   'membership',
+      ),
+    ),
   ]);
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard(
-      {required this.label, required this.value, required this.sub});
-  final String label, value, sub;
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.sub,
+  });
+  final IconData icon;
+  final Color    iconColor;
+  final String   label, value, sub;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       color: const Color(0xFF141414),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(color: Colors.white.withOpacity(0.06)),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: iconColor, size: 17),
+      ),
+      const SizedBox(height: 12),
       Text(label,
-          style: const TextStyle(color: Colors.white38, fontSize: 11)),
-      const SizedBox(height: 8),
+          style: const TextStyle(color: Colors.white38, fontSize: 10,
+              letterSpacing: 0.5)),
+      const SizedBox(height: 4),
       Text(value,
           style: const TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
-              height: 1)),
-      const SizedBox(height: 4),
+              height: 1),
+          overflow: TextOverflow.ellipsis),
+      const SizedBox(height: 3),
       Text(sub,
-          style:
-              const TextStyle(color: Color(0xFF444444), fontSize: 11)),
+          style: const TextStyle(color: Color(0xFF444444), fontSize: 11)),
     ]),
   );
 }
@@ -1033,24 +1314,25 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: const Color(0xFF141414),
-    borderRadius: BorderRadius.circular(14),
+    borderRadius: BorderRadius.circular(16),
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withOpacity(0.06)),
         ),
         child: Row(children: [
           Container(
-            width: 38, height: 38,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18)),
+                color: iconColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(11)),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -1069,51 +1351,41 @@ class _NavItem extends StatelessWidget {
             ),
           ),
           const Icon(Icons.chevron_right_rounded,
-              color: Color(0xFF333333), size: 18),
+              color: Color(0xFF333333), size: 20),
         ]),
       ),
     ),
   );
 }
 
-// ─── Calendar section ─────────────────────────────────────────────────────────
+// ─── Calendar card ────────────────────────────────────────────────────────────
 
-class _CalendarSection extends StatelessWidget {
-  const _CalendarSection({
+class _CalendarCard extends StatelessWidget {
+  const _CalendarCard({
     required this.focusedDay,
     required this.selectedDay,
     required this.presentDates,
     required this.onDaySelected,
   });
   final DateTime          focusedDay, selectedDay;
-  final Set<DateTime>       presentDates;
+  final Set<DateTime>     presentDates;
   final ValueChanged<DateTime> onDaySelected;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       color: const Color(0xFF141414),
       borderRadius: BorderRadius.circular(20),
       border: Border.all(color: Colors.white.withOpacity(0.06)),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('ATTENDANCE',
-            style: TextStyle(
-                color: Colors.white54,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        AttendanceCalendar(
-          focusedDay:    focusedDay,
-          selectedDay:   selectedDay,
-          presentDates:  presentDates,
-          onDaySelected: onDaySelected,
-        ),
-      ],
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: AttendanceCalendar(
+        focusedDay:    focusedDay,
+        selectedDay:   selectedDay,
+        presentDates:  presentDates,
+        onDaySelected: onDaySelected,
+      ),
     ),
   );
 }
