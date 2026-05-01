@@ -58,6 +58,7 @@ class MemberTile extends StatelessWidget {
               _Avatar(
                 name: member['name'] ?? 'G',
                 statusColor: isDeleted ? Colors.white24 : statusColor,
+                photoUrl: member['photoUrl'] as String?,
               ),
               const SizedBox(width: 13),
               Expanded(
@@ -120,10 +121,15 @@ class MemberTile extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, required this.statusColor});
+  const _Avatar({
+    required this.name,
+    required this.statusColor,
+    this.photoUrl,
+  });
 
   final String name;
   final Color statusColor;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -138,21 +144,33 @@ class _Avatar extends StatelessWidget {
             border: Border.all(color: statusColor, width: 2),
           ),
         ),
-        CircleAvatar(
-          radius: 19,
-          backgroundColor: Colors.yellowAccent.withOpacity(0.1),
-          child: Text(
-            name[0].toUpperCase(),
-            style: const TextStyle(
-              color: Colors.yellowAccent,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-        ),
+        photoUrl != null
+            ? ClipOval(
+                child: Image.network(
+                  photoUrl!,
+                  width: 38,
+                  height: 38,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _initials(),
+                ),
+              )
+            : _initials(),
       ],
     );
   }
+
+  Widget _initials() => CircleAvatar(
+    radius: 19,
+    backgroundColor: Colors.yellowAccent.withOpacity(0.1),
+    child: Text(
+      name.isNotEmpty ? name[0].toUpperCase() : 'G',
+      style: const TextStyle(
+        color: Colors.yellowAccent,
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
+      ),
+    ),
+  );
 }
 
 class _StatusBadge extends StatelessWidget {

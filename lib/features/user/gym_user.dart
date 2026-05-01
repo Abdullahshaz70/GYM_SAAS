@@ -10,6 +10,8 @@ import 'screens/pay_fee_screen.dart';
 import 'screens/user_payment_history_screen.dart';
 import 'screens/user_settings_screen.dart';
 import 'screens/payment_pending_screen.dart';
+import 'screens/workout_log_screen.dart';
+import 'screens/body_measurements_screen.dart';
 import '../../shared/qr_scan.dart';
 import '../../auth/login.dart';
 import '../../shared/gym_status_service.dart';
@@ -26,15 +28,16 @@ class _GymUserState extends State<GymUser> {
   final _user = FirebaseAuth.instance.currentUser!;
   final _fs   = FirestoreService();
 
-  String _gymId      = '';
-  String _gymName    = '';
-  String _userName   = 'Athlete';
-  String _feeStatus  = 'unpaid';
-  String _plan       = 'Standard';
-  String _expiryDate = '---';
-  double _currentFee = 0;
-  bool   _isPaid     = false;
-  bool   _isLoading  = true;
+  String  _gymId      = '';
+  String  _gymName    = '';
+  String  _userName   = 'Athlete';
+  String  _feeStatus  = 'unpaid';
+  String  _plan       = 'Standard';
+  String  _expiryDate = '---';
+  double  _currentFee = 0;
+  bool    _isPaid     = false;
+  bool    _isLoading  = true;
+  String? _photoUrl;
 
   GymStatusResult? _gymStatus;
 
@@ -66,8 +69,9 @@ class _GymUserState extends State<GymUser> {
         return;
       }
 
-      _gymId    = userData['gymId'] ?? '';
-      _userName = userData['name']  ?? 'Athlete';
+      _gymId    = userData['gymId']    ?? '';
+      _userName = userData['name']     ?? 'Athlete';
+      _photoUrl = userData['photoUrl'] as String?;
 
       if (_gymId.isNotEmpty) {
         final statusResult = await GymStatusService.checkAccess(_gymId);
@@ -295,7 +299,11 @@ class _GymUserState extends State<GymUser> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Profile header
-                    _ProfileBanner(userName: _userName, gymName: _gymName),
+                    _ProfileBanner(
+                      userName: _userName,
+                      gymName:  _gymName,
+                      photoUrl: _photoUrl,
+                    ),
                     const SizedBox(height: 20),
 
                     // Check-in CTA
@@ -332,6 +340,30 @@ class _GymUserState extends State<GymUser> {
                         context,
                         MaterialPageRoute(
                             builder: (_) => const UserPaymentHistoryScreen()),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _NavItem(
+                      icon:      Icons.fitness_center_rounded,
+                      iconColor: Colors.yellowAccent,
+                      label:     'Workout Log',
+                      subtitle:  'Track your training sessions',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const WorkoutLogScreen()),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _NavItem(
+                      icon:      Icons.monitor_weight_rounded,
+                      iconColor: const Color(0xFF4ADE80),
+                      label:     'Body Tracker',
+                      subtitle:  'Weight, BMI & measurements',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const BodyMeasurementsScreen()),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -374,9 +406,10 @@ class _GymUserState extends State<GymUser> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => _UserMenuSheet(
-        userName:    _userName,
-        gymName:     _gymName,
+        userName:     _userName,
+        gymName:      _gymName,
         isLoggingOut: _isLoggingOut,
+        photoUrl:     _photoUrl,
         onSettingsTap: () {
           Navigator.pop(context);
           Navigator.push(
@@ -385,9 +418,10 @@ class _GymUserState extends State<GymUser> {
               builder: (_) => UserSettingsScreen(
                 gymId:    _gymId,
                 userName: _userName,
+                photoUrl: _photoUrl,
               ),
             ),
-          );
+          ).then((_) => _loadUserData());
         },
         onLogoutTap: () {
           Navigator.pop(context);
@@ -400,30 +434,14 @@ class _GymUserState extends State<GymUser> {
   AppBar _buildAppBar({bool showActions = true}) => AppBar(
     backgroundColor: const Color(0xFF0A0A0A),
     elevation: 0,
-    titleSpacing: 16,
-    title: Row(
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: Colors.yellowAccent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.fitness_center_rounded,
-              color: Colors.black, size: 16),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          _gymName.isNotEmpty ? _gymName.toUpperCase() : 'GYM',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
+    title: Text(
+      _gymName.isNotEmpty ? _gymName.toUpperCase() : 'GYM',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
+      ),
     ),
     bottom: PreferredSize(
       preferredSize: const Size.fromHeight(1),
@@ -438,10 +456,9 @@ class _GymUserState extends State<GymUser> {
               onPressed: () {},
             ),
             IconButton(
-              icon: const Icon(Icons.menu_rounded, color: Colors.white70),
+              icon: const Icon(Icons.menu_rounded, color: Colors.white),
               onPressed: _openMenuSheet,
             ),
-            const SizedBox(width: 4),
           ]
         : null,
   );
@@ -456,11 +473,13 @@ class _UserMenuSheet extends StatelessWidget {
     required this.isLoggingOut,
     required this.onSettingsTap,
     required this.onLogoutTap,
+    this.photoUrl,
   });
 
   final String       userName, gymName;
   final bool         isLoggingOut;
   final VoidCallback onSettingsTap, onLogoutTap;
+  final String?      photoUrl;
 
   String get _initials {
     final words = userName.trim().split(RegExp(r'\s+'));
@@ -508,20 +527,35 @@ class _UserMenuSheet extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
+                    shape: BoxShape.circle,
                     color: Colors.yellowAccent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: Colors.yellowAccent.withOpacity(0.3), width: 1.5),
+                        color: Colors.yellowAccent.withOpacity(0.3),
+                        width: 1.5),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _initials,
-                    style: const TextStyle(
-                      color: Colors.yellowAccent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  child: photoUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            photoUrl!,
+                            fit: BoxFit.cover,
+                            width: 44,
+                            height: 44,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(_initials,
+                                  style: const TextStyle(
+                                      color: Colors.yellowAccent,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800)),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Text(_initials,
+                              style: const TextStyle(
+                                  color: Colors.yellowAccent,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800)),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -722,8 +756,13 @@ class _ReadOnlyBanner extends StatelessWidget {
 // ─── Profile banner ───────────────────────────────────────────────────────────
 
 class _ProfileBanner extends StatelessWidget {
-  const _ProfileBanner({required this.userName, required this.gymName});
-  final String userName, gymName;
+  const _ProfileBanner({
+    required this.userName,
+    required this.gymName,
+    this.photoUrl,
+  });
+  final String  userName, gymName;
+  final String? photoUrl;
 
   String _greeting() {
     final h = DateTime.now().hour;
@@ -744,16 +783,35 @@ class _ProfileBanner extends StatelessWidget {
           border: Border.all(
               color: Colors.yellowAccent.withOpacity(0.35), width: 1.5),
         ),
-        child: Center(
-          child: Text(
-            userName.isNotEmpty ? userName[0].toUpperCase() : 'A',
-            style: const TextStyle(
-              color: Colors.yellowAccent,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
+        child: photoUrl != null
+            ? ClipOval(
+                child: Image.network(
+                  photoUrl!,
+                  width: 54,
+                  height: 54,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Text(
+                      userName.isNotEmpty ? userName[0].toUpperCase() : 'A',
+                      style: const TextStyle(
+                        color: Colors.yellowAccent,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : Center(
+                child: Text(
+                  userName.isNotEmpty ? userName[0].toUpperCase() : 'A',
+                  style: const TextStyle(
+                    color: Colors.yellowAccent,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
       ),
       const SizedBox(width: 14),
       Expanded(

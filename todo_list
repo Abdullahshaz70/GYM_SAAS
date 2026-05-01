@@ -1,17 +1,13 @@
 ● Based on what's already built, here are features you can add:
                                                                                                                                         
   ---
-  For Members                                                                                                                             - Push notifications — fee due reminders, attendance streaks                                                                        
+For Members                                                                                                                             - Push notifications — fee due reminders, attendance streaks                                                                        
   - Workout/exercise log — let members track their workouts                                                                               - Body measurements tracker — weight, BMI over time with a chart                                                                    
   - Diet/nutrition tips section — static or dynamic content
   - Member profile photo upload
   - Referral system — member refers a friend, gets a discount
 
-  ---
-  For Staff
-  - Shift scheduling — who works which hours/days
-  - Staff attendance — track staff's own check-in/out
-  - Performance dashboard — how many members they've helped, fees collected
+
 
   ---
   For Owner

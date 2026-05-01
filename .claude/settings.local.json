@@ -28,7 +28,9 @@
       "PowerShell(Get-ChildItem *)",
       "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\" | Where-Object { $_.PSIsContainer -eq $false } | ForEach-Object { $_.Name } | Sort-Object)",
       "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\" | Where-Object { $_.PSIsContainer -eq $true } | ForEach-Object { $_.Name } | Sort-Object)",
-      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\\\\auth\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\('D:\\\\OWN THINGS\\\\saas\\\\lib\\\\auth\\\\', ''\\) } | Sort-Object)"
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\\\\auth\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\('D:\\\\OWN THINGS\\\\saas\\\\lib\\\\auth\\\\', ''\\) } | Sort-Object)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

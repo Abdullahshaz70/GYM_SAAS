@@ -238,6 +238,7 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
           'feeStatus': data['feeStatus'] ?? 'unpaid',
           'validUntil': data['validUntil'],
           'isDeleted': false,
+          'photoUrl': userDoc.data()?['photoUrl'] as String?,
         };
       });
 

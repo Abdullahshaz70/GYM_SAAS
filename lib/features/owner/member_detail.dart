@@ -22,11 +22,12 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   bool _loading = true;
   bool _isDeleted = false;
 
-  String name = '';
-  String contactNumber = '';
-  String plan = '';
-  num currentFee = 0;
-  String feeStatus = '';
+  String  name          = '';
+  String  contactNumber = '';
+  String  plan          = '';
+  num     currentFee    = 0;
+  String  feeStatus     = '';
+  String? photoUrl;
   DateTime? joinedAt;
   DateTime? validUntil;
   List<Map<String, dynamic>> recentPayments = [];
@@ -80,12 +81,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
           name = md?['name'] ?? 'Former Member';
           contactNumber = md?['contactNumber'] ?? '--';
         } else {
-          name = userDoc.data() != null
-              ? (userDoc.data() as Map)['name'] ?? 'Unknown'
-              : 'Unknown';
-          contactNumber = userDoc.data() != null
-              ? (userDoc.data() as Map)['contactNumber'] ?? '--'
-              : '--';
+          final ud = userDoc.data() as Map<String, dynamic>?;
+          name          = ud?['name']          ?? 'Unknown';
+          contactNumber = ud?['contactNumber'] ?? '--';
+          photoUrl      = ud?['photoUrl']      as String?;
         }
 
         plan = md?['plan'] ?? 'free';
@@ -295,6 +294,45 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     );
   }
 
+  void _openPhotoViewer(BuildContext ctx, String url) {
+    showDialog(
+      context: ctx,
+      barrierColor: Colors.black87,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Center(
+                child: Image.network(url, fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 48,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: Colors.white12,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Hero header (SliverAppBar background) ────────────────────────────
   Widget _buildHeroHeader(bool isPaid, Color statusColor) {
     return Container(
@@ -336,43 +374,70 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
               children: [
                 const SizedBox(height: 40),
 
-                // Avatar
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.yellowAccent.withOpacity(0.08),
-                        border: Border.all(
-                            color: Colors.yellowAccent.withOpacity(0.25),
-                            width: 2),
+                // Avatar — tap to zoom if photo is available
+                GestureDetector(
+                  onTap: photoUrl != null
+                      ? () => _openPhotoViewer(context, photoUrl!)
+                      : null,
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.yellowAccent.withOpacity(0.08),
+                          border: Border.all(
+                              color: Colors.yellowAccent.withOpacity(0.25),
+                              width: 2),
+                        ),
+                        child: photoUrl != null
+                            ? ClipOval(
+                                child: Image.network(
+                                  photoUrl!,
+                                  fit: BoxFit.cover,
+                                  width: 90,
+                                  height: 90,
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Text(
+                                      name.isNotEmpty
+                                          ? name[0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                          fontSize: 36,
+                                          color: Colors.yellowAccent,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                child: Text(
+                                  name.isNotEmpty
+                                      ? name[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                      fontSize: 36,
+                                      color: Colors.yellowAccent,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
                       ),
-                      child: Center(
-                        child: Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : '?',
-                          style: const TextStyle(
-                              fontSize: 36,
-                              color: Colors.yellowAccent,
-                              fontWeight: FontWeight.bold),
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                            color: Colors.black, shape: BoxShape.circle),
+                        child: Icon(
+                          isPaid
+                              ? Icons.check_circle_rounded
+                              : Icons.cancel_rounded,
+                          color: statusColor,
+                          size: 22,
                         ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                          color: Colors.black, shape: BoxShape.circle),
-                      child: Icon(
-                        isPaid
-                            ? Icons.check_circle_rounded
-                            : Icons.cancel_rounded,
-                        color: statusColor,
-                        size: 22,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
 

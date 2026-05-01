@@ -99,11 +99,12 @@ Future<void> _loadData() async {
       if (status != 'paid') unpaid++;
       loaded.add({
         'uid'        : doc.id,
-        'name'       : mData['name'] ?? 'Unknown',   // ← from members doc, no extra read
+        'name'       : mData['name'] ?? 'Unknown',
         'plan'       : mData['plan'] ?? 'Monthly',
         'feeStatus'  : status,
         'currentFee' : mData['currentFee'] ?? 0,
         'validUntil' : mData['validUntil'],
+        'photoUrl'   : mData['photoUrl'] as String?,
       });
     }
 
@@ -611,30 +612,34 @@ class _MemberRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: statusColor, width: 2),
-                ),
-              ),
-              CircleAvatar(
-                radius: 19,
-                backgroundColor: Colors.yellowAccent.withOpacity(0.1),
-                child: Text(
-                  (member['name'] as String)[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.yellowAccent,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+          GestureDetector(
+            onTap: member['photoUrl'] != null
+                ? () => _openPhotoViewer(context, member['photoUrl'] as String)
+                : null,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: statusColor, width: 2),
                   ),
                 ),
-              ),
-            ],
+                member['photoUrl'] != null
+                    ? ClipOval(
+                        child: Image.network(
+                          member['photoUrl'] as String,
+                          width: 38,
+                          height: 38,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _initialsAvatar(),
+                        ),
+                      )
+                    : _initialsAvatar(),
+              ],
+            ),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -678,6 +683,58 @@ class _MemberRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _initialsAvatar() => CircleAvatar(
+    radius: 19,
+    backgroundColor: Colors.yellowAccent.withOpacity(0.1),
+    child: Text(
+      (member['name'] as String? ?? 'M')[0].toUpperCase(),
+      style: const TextStyle(
+        color: Colors.yellowAccent,
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
+      ),
+    ),
+  );
+
+  void _openPhotoViewer(BuildContext ctx, String url) {
+    showDialog(
+      context: ctx,
+      barrierColor: Colors.black87,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Center(
+                child: Image.network(url, fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 48,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: Colors.white12,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
