@@ -1898,6 +1898,7 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'report_history_screen.dart';
+import '../expenses/expense_tracker_screen.dart';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 const _navy     = Color(0xFF000000);
@@ -1924,6 +1925,11 @@ class _AnalyticsData {
   final Map<String, int>    membersByPlan;
   final List<Map<String, dynamic>> recentPayments;
   final List<Map<String, dynamic>> staffList;
+  final double totalExpenses;
+  final Map<String, double> expensesByCategory;
+  final Map<String, double> expensesByMonth;
+
+  double get netProfit => totalRevenue - totalExpenses;
 
   const _AnalyticsData({
     required this.totalRevenue,
@@ -1938,6 +1944,9 @@ class _AnalyticsData {
     required this.membersByPlan,
     required this.recentPayments,
     required this.staffList,
+    required this.totalExpenses,
+    required this.expensesByCategory,
+    required this.expensesByMonth,
   });
 }
 
@@ -1971,7 +1980,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     _load();
   }
 
@@ -2002,6 +2011,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
         fs.collection('users')
             .where('gymId', isEqualTo: widget.gymId)
             .where('role', isEqualTo: 'staff').get(),
+        gymRef.collection('expenses').get(),
       ]);
 
       final paymentsSnap  = results[0] as QuerySnapshot;
@@ -2009,6 +2019,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
       final todayAttSnap  = results[2] as QuerySnapshot;
       final monthAttSnap  = results[3] as QuerySnapshot;
       final staffSnap     = results[4] as QuerySnapshot;
+      final expensesSnap  = results[5] as QuerySnapshot;
 
       // Revenue aggregation
       double total = 0, cash = 0, online = 0;
@@ -2063,20 +2074,40 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
           .map((d) => {'uid': d.id, ...d.data() as Map<String, dynamic>})
           .toList();
 
+      // Expense aggregation
+      double totalExp = 0;
+      final Map<String, double> expByCat = {};
+      final Map<String, double> expByMonth = {};
+      for (final doc in expensesSnap.docs) {
+        final d = doc.data() as Map<String, dynamic>;
+        final amt = (d['amount'] as num? ?? 0).toDouble();
+        totalExp += amt;
+        final cat = (d['category'] as String? ?? 'Other');
+        expByCat[cat] = (expByCat[cat] ?? 0) + amt;
+        final ts = d['date'] as Timestamp?;
+        if (ts != null) {
+          final label = DateFormat('MMM').format(ts.toDate());
+          expByMonth[label] = (expByMonth[label] ?? 0) + amt;
+        }
+      }
+
       setState(() {
         _data = _AnalyticsData(
-          totalRevenue:    total,
-          cashRevenue:     cash,
-          onlineRevenue:   online,
-          totalMembers:    membersSnap.size,
-          activeMembers:   active,
-          overdueMembers:  overdue,
-          todayAttendance: todayAttSnap.size,
-          monthAttendance: monthAttSnap.size,
-          revenueByMonth:  byMonth,
-          membersByPlan:   byPlan,
-          recentPayments:  recentPay.take(50).toList(),
-          staffList:       staff,
+          totalRevenue:      total,
+          cashRevenue:       cash,
+          onlineRevenue:     online,
+          totalMembers:      membersSnap.size,
+          activeMembers:     active,
+          overdueMembers:    overdue,
+          todayAttendance:   todayAttSnap.size,
+          monthAttendance:   monthAttSnap.size,
+          revenueByMonth:    byMonth,
+          membersByPlan:     byPlan,
+          recentPayments:    recentPay.take(50).toList(),
+          staffList:         staff,
+          totalExpenses:     totalExp,
+          expensesByCategory: expByCat,
+          expensesByMonth:   expByMonth,
         );
         _loading = false;
       });
@@ -2177,6 +2208,8 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
         'overdueMembers':  _data!.overdueMembers,
         'todayAttendance': _data!.todayAttendance,
         'monthAttendance': _data!.monthAttendance,
+        'totalExpenses':   _data!.totalExpenses,
+        'netProfit':       _data!.netProfit,
       },
       'sortKey':     DateTime.now().toIso8601String(),
       'generatedAt': FieldValue.serverTimestamp(),
@@ -2196,141 +2229,245 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
 
   // ── PDF Builder ─────────────────────────────────────────────────────────────
   static Future<Uint8List> _buildPdf(_AnalyticsData d, String gymName) async {
-    final pdf = pw.Document();
-    final now = DateTime.now();
-    final fmt = DateFormat('dd MMM yyyy, hh:mm a');
-    final fmtNum = NumberFormat('#,##0.00', 'en_US');
+    final pdf  = pw.Document();
+    final now  = DateTime.now();
+    final fmt  = DateFormat('dd MMM yyyy, hh:mm a');
+    final fmtN = NumberFormat('#,##0', 'en_US');
+    final fmtD = NumberFormat('#,##0.00', 'en_US');
+
+    final netProfit     = d.netProfit;
+    final isProfit      = netProfit >= 0;
+    final netColor      = isProfit ? PdfColors.green700 : PdfColors.red700;
+    final profitMargin  = d.totalRevenue > 0
+        ? (netProfit / d.totalRevenue * 100).toStringAsFixed(1)
+        : '0.0';
+    final activeRate = d.totalMembers > 0
+        ? (d.activeMembers / d.totalMembers * 100).toStringAsFixed(1)
+        : '0.0';
+    final feeCollRate = d.totalMembers > 0
+        ? ((d.totalMembers - d.overdueMembers) / d.totalMembers * 100)
+            .toStringAsFixed(1)
+        : '0.0';
+
+    // Build all months present in revenue or expenses
+    final allMonths = <String>{
+      ...d.revenueByMonth.keys,
+      ...d.expensesByMonth.keys,
+    }.toList();
 
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(32),
-      header: (ctx) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(gymName.toUpperCase(),
-                      style: pw.TextStyle(
-                          fontSize: 22,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blueGrey800)),
-                  pw.Text('Strategic Owner Report — CONFIDENTIAL',
-                      style: const pw.TextStyle(
-                          fontSize: 11, color: PdfColors.blueGrey400)),
-                ],
+      margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+      header: (ctx) => pw.Column(children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text(gymName.toUpperCase(),
+                  style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blueGrey900)),
+              pw.SizedBox(height: 2),
+              pw.Text('Strategic Financial Report  ·  CONFIDENTIAL',
+                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.blueGrey400)),
+            ]),
+            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+              pw.Text('Generated ${fmt.format(now)}',
+                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.blueGrey500)),
+              pw.SizedBox(height: 3),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: pw.BoxDecoration(
+                  color: isProfit ? PdfColors.green50 : PdfColors.red50,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Text(
+                  isProfit ? '▲ PROFIT' : '▼ LOSS',
+                  style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: netColor),
+                ),
               ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text('Generated:',
-                      style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
-                  pw.Text(fmt.format(now),
-                      style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blueGrey700)),
-                ],
-              ),
-            ],
-          ),
-          pw.Divider(color: PdfColors.blueGrey200, thickness: 1.5),
-          pw.SizedBox(height: 4),
-        ],
-      ),
+            ]),
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Divider(color: PdfColors.blueGrey200, thickness: 1),
+        pw.SizedBox(height: 2),
+      ]),
       footer: (ctx) => pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text('CONFIDENTIAL — Owner Eyes Only',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
-          pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey)),
+          pw.Text('Page ${ctx.pageNumber} / ${ctx.pagesCount}',
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey)),
         ],
       ),
       build: (ctx) => [
-        // ── KPI Summary Cards ──────────────────────────────────────────────
-        pw.Text('KEY PERFORMANCE INDICATORS',
-            style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blueGrey700)),
-        pw.SizedBox(height: 10),
+
+        // ── Executive Summary ──────────────────────────────────────────────
+        _pdfSectionTitle('EXECUTIVE SUMMARY'),
+        pw.SizedBox(height: 8),
+        pw.Row(children: [
+          pw.Expanded(child: _pdfSummaryBox('Total Revenue',
+              'Rs ${fmtN.format(d.totalRevenue)}', PdfColors.teal700, PdfColors.teal50)),
+          pw.SizedBox(width: 8),
+          pw.Expanded(child: _pdfSummaryBox('Total Expenses',
+              'Rs ${fmtN.format(d.totalExpenses)}', PdfColors.red700, PdfColors.red50)),
+          pw.SizedBox(width: 8),
+          pw.Expanded(child: _pdfSummaryBox(
+              isProfit ? 'Net Profit' : 'Net Loss',
+              'Rs ${fmtN.format(netProfit.abs())}',
+              netColor,
+              isProfit ? PdfColors.green50 : PdfColors.red50)),
+        ]),
+        pw.SizedBox(height: 8),
+        pw.Row(children: [
+          pw.Expanded(child: _pdfStatChip('Profit Margin', '$profitMargin%',
+              isProfit ? PdfColors.green700 : PdfColors.red700)),
+          pw.SizedBox(width: 8),
+          pw.Expanded(child: _pdfStatChip('Active Member Rate', '$activeRate%', PdfColors.cyan700)),
+          pw.SizedBox(width: 8),
+          pw.Expanded(child: _pdfStatChip('Fee Collection Rate', '$feeCollRate%', PdfColors.blue700)),
+          pw.SizedBox(width: 8),
+          pw.Expanded(child: _pdfStatChip('Today\'s Check-ins', '${d.todayAttendance}', PdfColors.indigo700)),
+        ]),
+        pw.SizedBox(height: 18),
+
+        // ── KPI Grid ──────────────────────────────────────────────────────
+        _pdfSectionTitle('KEY PERFORMANCE INDICATORS'),
+        pw.SizedBox(height: 8),
         pw.GridView(
           crossAxisCount: 3,
-          childAspectRatio: 2.2,
+          childAspectRatio: 2.4,
           children: [
-            _pdfKpiCard('Total Revenue',  'Rs ${fmtNum.format(d.totalRevenue)}',  PdfColors.teal700),
-            _pdfKpiCard('Cash Revenue',   'Rs ${fmtNum.format(d.cashRevenue)}',   PdfColors.green700),
-            _pdfKpiCard('Online Revenue', 'Rs ${fmtNum.format(d.onlineRevenue)}', PdfColors.blue700),
-            _pdfKpiCard('Total Members',  '${d.totalMembers}',                    PdfColors.indigo700),
-            _pdfKpiCard('Active Members', '${d.activeMembers}',                   PdfColors.cyan700),
-            _pdfKpiCard('Overdue Fees',   '${d.overdueMembers}',                  PdfColors.red700),
+            _pdfKpiCard('Total Revenue',  'Rs ${fmtN.format(d.totalRevenue)}',  PdfColors.teal700),
+            _pdfKpiCard('Cash Revenue',   'Rs ${fmtN.format(d.cashRevenue)}',   PdfColors.green700),
+            _pdfKpiCard('Online Revenue', 'Rs ${fmtN.format(d.onlineRevenue)}', PdfColors.blue700),
+            _pdfKpiCard('Total Expenses', 'Rs ${fmtN.format(d.totalExpenses)}', PdfColors.red700),
+            _pdfKpiCard(isProfit ? 'Net Profit' : 'Net Loss',
+                'Rs ${fmtN.format(netProfit.abs())}', netColor),
+            _pdfKpiCard('Profit Margin', '$profitMargin%',
+                isProfit ? PdfColors.green600 : PdfColors.red600),
+            _pdfKpiCard('Total Members',  '${d.totalMembers}',   PdfColors.indigo700),
+            _pdfKpiCard('Active Members', '${d.activeMembers}',  PdfColors.cyan700),
+            _pdfKpiCard('Overdue Fees',   '${d.overdueMembers}', PdfColors.orange700),
           ],
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 18),
 
-        // ── Revenue by Month ───────────────────────────────────────────────
-        pw.Text('REVENUE BY MONTH',
-            style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blueGrey700)),
+        // ── Revenue vs Expenses by Month ───────────────────────────────────
+        _pdfSectionTitle('MONTHLY COMPARISON — REVENUE vs EXPENSES'),
         pw.SizedBox(height: 8),
         _pdfTable(
-          headers: ['Month', 'Revenue (Rs)'],
-          flexes: [2, 3],
-          rows: d.revenueByMonth.isEmpty
-              ? [['—', '—']]
-              : d.revenueByMonth.entries
-                  .map((e) => [e.key, fmtNum.format(e.value)])
-                  .toList(),
+          headers: ['Month', 'Revenue (Rs)', 'Expenses (Rs)', 'Net (Rs)', 'Margin'],
+          flexes: [2, 3, 3, 3, 2],
+          rows: allMonths.isEmpty
+              ? [['—', '—', '—', '—', '—']]
+              : allMonths.map((m) {
+                  final rev = d.revenueByMonth[m] ?? 0;
+                  final exp = d.expensesByMonth[m] ?? 0;
+                  final net = rev - exp;
+                  final margin = rev > 0
+                      ? '${(net / rev * 100).toStringAsFixed(1)}%'
+                      : '—';
+                  return [
+                    m,
+                    fmtD.format(rev),
+                    fmtD.format(exp),
+                    (net >= 0 ? '+' : '') + fmtD.format(net),
+                    margin,
+                  ];
+                }).toList(),
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 18),
 
-        // ── Members by Plan ────────────────────────────────────────────────
-        pw.Text('MEMBERSHIP BREAKDOWN',
-            style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blueGrey700)),
+        // ── Expense Breakdown ──────────────────────────────────────────────
+        _pdfSectionTitle('EXPENSE BREAKDOWN BY CATEGORY'),
+        pw.SizedBox(height: 8),
+        if (d.expensesByCategory.isEmpty)
+          _pdfTable(
+            headers: ['Category', 'Amount (Rs)', '% of Total'],
+            flexes: [3, 3, 2],
+            rows: [['No expenses recorded', '—', '—']],
+          )
+        else
+          _pdfTable(
+            headers: ['Category', 'Amount (Rs)', '% of Total'],
+            flexes: [3, 3, 2],
+            rows: (d.expensesByCategory.entries.toList()
+                  ..sort((a, b) => b.value.compareTo(a.value)))
+                .map((e) {
+              final pct = d.totalExpenses > 0
+                  ? (e.value / d.totalExpenses * 100).toStringAsFixed(1)
+                  : '0.0';
+              return [e.key, fmtD.format(e.value), '$pct%'];
+            }).toList(),
+          ),
+        pw.SizedBox(height: 18),
+
+        // ── Membership Breakdown ───────────────────────────────────────────
+        _pdfSectionTitle('MEMBERSHIP BREAKDOWN'),
         pw.SizedBox(height: 8),
         _pdfTable(
-          headers: ['Plan', 'Members'],
-          flexes: [3, 2],
+          headers: ['Plan', 'Members', '% of Total'],
+          flexes: [3, 2, 2],
           rows: d.membersByPlan.isEmpty
-              ? [['—', '0']]
-              : d.membersByPlan.entries
-                  .map((e) => [e.key, '${e.value}'])
-                  .toList(),
+              ? [['—', '0', '—']]
+              : d.membersByPlan.entries.map((e) {
+                  final pct = d.totalMembers > 0
+                      ? (e.value / d.totalMembers * 100).toStringAsFixed(1)
+                      : '0.0';
+                  return [e.key, '${e.value}', '$pct%'];
+                }).toList(),
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 18),
 
         // ── Attendance ─────────────────────────────────────────────────────
-        pw.Text('ATTENDANCE SUMMARY',
-            style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blueGrey700)),
+        _pdfSectionTitle('ATTENDANCE SUMMARY'),
         pw.SizedBox(height: 8),
         _pdfTable(
-          headers: ['Period', 'Check-ins'],
-          flexes: [3, 2],
+          headers: ['Period', 'Check-ins', 'Avg / Active Member'],
+          flexes: [3, 2, 3],
           rows: [
-            ['Today',      '${d.todayAttendance}'],
-            ['This Month', '${d.monthAttendance}'],
+            ['Today', '${d.todayAttendance}', '—'],
+            [
+              'This Month',
+              '${d.monthAttendance}',
+              d.activeMembers > 0
+                  ? fmtD.format(d.monthAttendance / d.activeMembers)
+                  : '—',
+            ],
           ],
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 18),
 
-        // ── Recent Payments ────────────────────────────────────────────────
-        pw.Text('RECENT TRANSACTIONS (last 20)',
-            style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blueGrey700)),
+        // ── Revenue Split ──────────────────────────────────────────────────
+        _pdfSectionTitle('REVENUE SPLIT'),
+        pw.SizedBox(height: 8),
+        _pdfTable(
+          headers: ['Channel', 'Amount (Rs)', '% of Revenue'],
+          flexes: [3, 3, 2],
+          rows: [
+            [
+              'Cash',
+              fmtD.format(d.cashRevenue),
+              d.totalRevenue > 0
+                  ? '${(d.cashRevenue / d.totalRevenue * 100).toStringAsFixed(1)}%'
+                  : '—',
+            ],
+            [
+              'Online (EP/JC)',
+              fmtD.format(d.onlineRevenue),
+              d.totalRevenue > 0
+                  ? '${(d.onlineRevenue / d.totalRevenue * 100).toStringAsFixed(1)}%'
+                  : '—',
+            ],
+            ['TOTAL', fmtD.format(d.totalRevenue), '100%'],
+          ],
+        ),
+        pw.SizedBox(height: 18),
+
+        // ── Recent Transactions ────────────────────────────────────────────
+        _pdfSectionTitle('RECENT TRANSACTIONS (last 20)'),
         pw.SizedBox(height: 8),
         _pdfTable(
           headers: ['Date', 'Amount (Rs)', 'Method', 'Status'],
@@ -2341,7 +2478,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
             final date = dt != null ? DateFormat('dd MMM yy').format(dt) : '—';
             return [
               date,
-              fmtNum.format((p['amount'] as num? ?? 0)),
+              fmtD.format((p['amount'] as num? ?? 0)),
               (p['method'] ?? '—').toString().toUpperCase(),
               (p['status']  ?? '—').toString().toUpperCase(),
             ];
@@ -2352,6 +2489,49 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
 
     return pdf.save();
   }
+
+  static pw.Widget _pdfSectionTitle(String t) => pw.Text(t,
+      style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold,
+          color: PdfColors.blueGrey800));
+
+  static pw.Widget _pdfSummaryBox(
+      String label, String value, PdfColor textColor, PdfColor bgColor) =>
+      pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: bgColor,
+          borderRadius: pw.BorderRadius.circular(6),
+          border: pw.Border.all(color: textColor, width: 0.5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(label, style: const pw.TextStyle(fontSize: 8, color: PdfColors.blueGrey600)),
+            pw.SizedBox(height: 4),
+            pw.Text(value,
+                style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: textColor)),
+          ],
+        ),
+      );
+
+  static pw.Widget _pdfStatChip(String label, String value, PdfColor color) =>
+      pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.blueGrey50,
+          borderRadius: pw.BorderRadius.circular(5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(value,
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
+            pw.SizedBox(height: 2),
+            pw.Text(label,
+                style: const pw.TextStyle(fontSize: 7, color: PdfColors.blueGrey500)),
+          ],
+        ),
+      );
 
   // ── PDF helpers ─────────────────────────────────────────────────────────────
   static pw.Widget _pdfKpiCard(String label, String value, PdfColor color) =>
@@ -2491,6 +2671,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
           tabs: const [
             Tab(text: 'OVERVIEW'),
             Tab(text: 'REVENUE'),
+            Tab(text: 'EXPENSES'),
             Tab(text: 'MEMBERS'),
           ],
         ),
@@ -2570,6 +2751,7 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
         children: [
           _OverviewTab(data: _data!),
           _RevenueTab(data: _data!),
+          _ExpensesTab(data: _data!, gymId: widget.gymId),
           _MembersTab(data: _data!),
         ],
       );
@@ -2616,14 +2798,21 @@ class _OverviewTab extends StatelessWidget {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  _KpiCard(label: 'Total Revenue',  value: 'Rs ${_fmt(data.totalRevenue)}',  icon: Icons.trending_up_rounded,   color: _green),
-                  _KpiCard(label: 'Cash In',        value: 'Rs ${_fmt(data.cashRevenue)}',   icon: Icons.account_balance_rounded, color: _amber),
-                  _KpiCard(label: 'Online In',      value: 'Rs ${_fmt(data.onlineRevenue)}', icon: Icons.contactless_rounded,   color: _accent),
-                  _KpiCard(label: 'Total Members',  value: '${data.totalMembers}',           icon: Icons.groups_rounded,        color: const Color(0xFFA78BFA)),
-                  _KpiCard(label: 'Active Members', value: '${data.activeMembers}',          icon: Icons.verified_rounded,      color: _green),
+                  _KpiCard(label: 'Total Revenue',  value: 'Rs ${_fmt(data.totalRevenue)}',  icon: Icons.trending_up_rounded,        color: _green),
+                  _KpiCard(label: 'Total Expenses', value: 'Rs ${_fmt(data.totalExpenses)}', icon: Icons.receipt_long_rounded,       color: _rose),
+                  _KpiCard(
+                    label: data.netProfit >= 0 ? 'Net Profit' : 'Net Loss',
+                    value: 'Rs ${_fmt(data.netProfit.abs())}',
+                    icon: data.netProfit >= 0 ? Icons.savings_rounded : Icons.trending_down_rounded,
+                    color: data.netProfit >= 0 ? _green : _rose,
+                  ),
+                  _KpiCard(label: 'Cash In',        value: 'Rs ${_fmt(data.cashRevenue)}',   icon: Icons.account_balance_rounded,    color: _amber),
+                  _KpiCard(label: 'Online In',      value: 'Rs ${_fmt(data.onlineRevenue)}', icon: Icons.contactless_rounded,        color: _accent),
+                  _KpiCard(label: 'Total Members',  value: '${data.totalMembers}',           icon: Icons.groups_rounded,             color: const Color(0xFFA78BFA)),
+                  _KpiCard(label: 'Active Members', value: '${data.activeMembers}',          icon: Icons.verified_rounded,           color: _green),
                   _KpiCard(label: 'Overdue Fees',   value: '${data.overdueMembers}',         icon: Icons.running_with_errors_rounded, color: _rose),
-                  _KpiCard(label: 'Today Visits',   value: '${data.todayAttendance}',        icon: Icons.directions_walk_rounded, color: _accent),
-                  _KpiCard(label: 'Month Visits',   value: '${data.monthAttendance}',        icon: Icons.bar_chart_rounded,     color: _amber),
+                  _KpiCard(label: 'Today Visits',   value: '${data.todayAttendance}',        icon: Icons.directions_walk_rounded,    color: _accent),
+                  _KpiCard(label: 'Month Visits',   value: '${data.monthAttendance}',        icon: Icons.bar_chart_rounded,          color: _amber),
                 ],
               ),
             ),
@@ -3039,6 +3228,221 @@ class _MembersTab extends StatelessWidget {
           ],
         ),
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  EXPENSES TAB
+// ─────────────────────────────────────────────────────────────────────────────
+class _ExpensesTab extends StatelessWidget {
+  final _AnalyticsData data;
+  final String gymId;
+  const _ExpensesTab({required this.data, required this.gymId});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt   = NumberFormat('#,##0', 'en_US');
+    final sorted = data.expensesByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final isProfit = data.netProfit >= 0;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // ── Net P&L banner ──────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isProfit
+                  ? const Color(0xFF4ADE80).withOpacity(0.08)
+                  : _rose.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: isProfit
+                      ? const Color(0xFF4ADE80).withOpacity(0.3)
+                      : _rose.withOpacity(0.3)),
+            ),
+            child: Row(children: [
+              Icon(
+                isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                color: isProfit ? _green : _rose,
+                size: 28,
+              ),
+              const SizedBox(width: 14),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(isProfit ? 'NET PROFIT' : 'NET LOSS',
+                    style: TextStyle(
+                        color: isProfit ? _green : _rose,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2)),
+                const SizedBox(height: 2),
+                Text('Rs ${fmt.format(data.netProfit.abs())}',
+                    style: TextStyle(
+                        color: isProfit ? _green : _rose,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900)),
+              ]),
+              const Spacer(),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                _miniStat('Revenue', 'Rs ${fmt.format(data.totalRevenue)}', _green),
+                const SizedBox(height: 6),
+                _miniStat('Expenses', 'Rs ${fmt.format(data.totalExpenses)}', _rose),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Revenue vs Expenses comparison ──────────────────────────────
+          _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('REVENUE vs EXPENSES',
+                style: TextStyle(color: _textSec, fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+            const SizedBox(height: 14),
+            _comparisonBar('Revenue', data.totalRevenue,
+                data.totalRevenue + data.totalExpenses, _green),
+            const SizedBox(height: 10),
+            _comparisonBar('Expenses', data.totalExpenses,
+                data.totalRevenue + data.totalExpenses, _rose),
+            const SizedBox(height: 10),
+            if (data.totalRevenue > 0) ...[
+              const Divider(color: Colors.white12, height: 1),
+              const SizedBox(height: 10),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('PROFIT MARGIN',
+                    style: TextStyle(color: _textSec, fontSize: 10, fontWeight: FontWeight.w600)),
+                Text(
+                  '${(data.netProfit / data.totalRevenue * 100).toStringAsFixed(1)}%',
+                  style: TextStyle(
+                      color: isProfit ? _green : _rose,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800),
+                ),
+              ]),
+            ],
+          ])),
+          const SizedBox(height: 16),
+
+          // ── Expense by Category ─────────────────────────────────────────
+          _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('EXPENSE BY CATEGORY',
+                style: TextStyle(color: _textSec, fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+            const SizedBox(height: 14),
+            if (sorted.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Text('No expenses recorded yet',
+                      style: TextStyle(color: _textSec)),
+                ),
+              )
+            else
+              ...sorted.map((e) {
+                const catColors = {
+                  'Rent':        Color(0xFFA78BFA),
+                  'Electricity': Color(0xFFFBBF24),
+                  'Salaries':    Color(0xFF4ADE80),
+                  'Equipment':   Color(0xFF60A5FA),
+                  'Maintenance': Color(0xFFF87171),
+                  'Marketing':   Color(0xFFFB923C),
+                  'Other':       Color(0xFF9E9E9E),
+                };
+                final pct = data.totalExpenses > 0 ? e.value / data.totalExpenses : 0.0;
+                final color = catColors[e.key] ?? _textSec;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text(e.key, style: const TextStyle(color: _textPri, fontSize: 13)),
+                      Row(children: [
+                        Text('${(pct * 100).toStringAsFixed(1)}%',
+                            style: const TextStyle(color: _textSec, fontSize: 11)),
+                        const SizedBox(width: 8),
+                        Text('Rs ${fmt.format(e.value)}',
+                            style: TextStyle(color: color, fontSize: 13,
+                                fontWeight: FontWeight.w700)),
+                      ]),
+                    ]),
+                    const SizedBox(height: 5),
+                    LinearProgressIndicator(
+                      value: pct.clamp(0.0, 1.0),
+                      backgroundColor: Colors.white10,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                      minHeight: 5,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ]),
+                );
+              }),
+          ])),
+          const SizedBox(height: 16),
+
+          // ── Manage Expenses button ──────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => ExpenseTrackerScreen(gymId: gymId)),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: _accent.withOpacity(0.5)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.receipt_long_rounded,
+                  color: _accent, size: 18),
+              label: const Text('Manage Expenses',
+                  style: TextStyle(color: _accent, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value, Color color) => Column(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Text(label, style: const TextStyle(color: _textSec, fontSize: 10)),
+      const SizedBox(height: 1),
+      Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+    ],
+  );
+
+  Widget _comparisonBar(String label, double value, double total, Color color) {
+    final pct = total > 0 ? value / total : 0.0;
+    final fmt = NumberFormat('#,##0', 'en_US');
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Row(children: [
+          Container(width: 8, height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: _textPri, fontSize: 12)),
+        ]),
+        Text('Rs ${fmt.format(value)}',
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+      ]),
+      const SizedBox(height: 5),
+      LinearProgressIndicator(
+        value: pct.clamp(0.0, 1.0),
+        backgroundColor: Colors.white10,
+        valueColor: AlwaysStoppedAnimation<Color>(color),
+        minHeight: 6,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      const SizedBox(height: 2),
+      Text('${(pct * 100).toStringAsFixed(1)}%',
+          style: const TextStyle(color: _textSec, fontSize: 10)),
+    ]);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ class ActionMenuSheet extends StatelessWidget {
     required this.isLoggingOut,
     required this.onRegistrationQrTap,
     required this.onStaffManagerTap,
+    required this.onExpenseTrackerTap,
     required this.onLogoutTap,
   });
 
@@ -14,6 +15,7 @@ class ActionMenuSheet extends StatelessWidget {
   final bool isLoggingOut;
   final VoidCallback onRegistrationQrTap;
   final VoidCallback onStaffManagerTap;
+  final VoidCallback onExpenseTrackerTap;
   final VoidCallback onLogoutTap;
 
   @override
@@ -67,6 +69,16 @@ class ActionMenuSheet extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               onStaffManagerTap();
+            },
+          ),
+          _SheetItem(
+            icon: Icons.receipt_long_rounded,
+            iconColor: const Color(0xFFF87171),
+            label: 'Expense tracker',
+            subtitle: 'Track gym operating costs',
+            onTap: () {
+              Navigator.pop(context);
+              onExpenseTrackerTap();
             },
           ),
 

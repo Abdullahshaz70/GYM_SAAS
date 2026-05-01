@@ -17,6 +17,7 @@ import '../../shared/gym_status_service.dart';
 import '../../shared/utils.dart';
 
 import 'analytics/owner_analytics_screen.dart';
+import 'expenses/expense_tracker_screen.dart';
 
 class GymOwnerScreen extends StatefulWidget {
   const GymOwnerScreen({super.key});
@@ -391,6 +392,14 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
             MaterialPageRoute(
               builder: (_) => ManageStaffScreen(
                   gymId: _gymId!, allMembers: _allMembers),
+            ),
+          ),
+        ),
+        onExpenseTrackerTap: () => _requireFullAccess(
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ExpenseTrackerScreen(gymId: _gymId!),
             ),
           ),
         ),

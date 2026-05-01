@@ -21,7 +21,14 @@
       "Bash(node -e ' *)",
       "Bash(node *)",
       "Bash(firebase firestore:get \"gyms\")",
-      "Bash(firebase firestore:databases:list)"
+      "Bash(firebase firestore:databases:list)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\\\\features\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\('D:\\\\OWN THINGS\\\\saas\\\\lib\\\\features\\\\', ''\\) } | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\\\\features\" -Recurse -Directory | ForEach-Object { $_.FullName.Replace\\('D:\\\\OWN THINGS\\\\saas\\\\lib\\\\features\\\\', ''\\) } | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\\\\shared\" -Recurse | ForEach-Object { $_.FullName.Replace\\('D:\\\\OWN THINGS\\\\saas\\\\lib\\\\shared\\\\', ''\\) } | Sort-Object)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\" | Where-Object { $_.PSIsContainer -eq $false } | ForEach-Object { $_.Name } | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\" | Where-Object { $_.PSIsContainer -eq $true } | ForEach-Object { $_.Name } | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\OWN THINGS\\\\saas\\\\lib\\\\auth\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\('D:\\\\OWN THINGS\\\\saas\\\\lib\\\\auth\\\\', ''\\) } | Sort-Object)"
     ]
   }
 }

@@ -1,0 +1,38 @@
+● Based on what's already built, here are features you can add:
+                                                                                                                                        
+  ---
+  For Members                                                                                                                             - Push notifications — fee due reminders, attendance streaks                                                                        
+  - Workout/exercise log — let members track their workouts                                                                               - Body measurements tracker — weight, BMI over time with a chart                                                                    
+  - Diet/nutrition tips section — static or dynamic content
+  - Member profile photo upload
+  - Referral system — member refers a friend, gets a discount
+
+  ---
+  For Staff
+  - Shift scheduling — who works which hours/days
+  - Staff attendance — track staff's own check-in/out
+  - Performance dashboard — how many members they've helped, fees collected
+
+  ---
+  For Owner
+  - SMS/WhatsApp notifications to members for fee reminders
+  - Expense tracking — gym expenses (electricity, equipment, rent)
+  - Equipment inventory management
+  - Multi-branch support — owner manages more than one gym location
+  - Revenue vs expense comparison charts
+  - Member retention reports — who's about to lapse
+  - Announcement/notice board — broadcast messages to all members
+  - Discount/promo codes for membership fees
+  - Trial membership support — free X-day trial period
+
+  ---
+  General / Platform
+  - Dark/light theme toggle
+  - In-app chat between staff and members
+  - Document upload — contracts, medical certificates
+  - Backup & export — export member data to Excel/CSV
+  - Member birthday reminders for the owner/staff
+  - Feedback/rating system — members rate the gym
+
+  ---
+  The biggest value-adds for a real gym business would be expense tracking, SMS/WhatsApp fee reminders, and multi-branch support.
