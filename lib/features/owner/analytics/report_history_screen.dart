@@ -246,6 +246,8 @@ class ReportHistoryScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         // Single-field orderBy — no composite index needed
         stream: FirebaseFirestore.instance
+            .collection('gyms')
+            .doc(gymId)
             .collection('pos_reports_history')
             .orderBy('sortKey', descending: true)
             .limit(100)
@@ -268,11 +270,7 @@ class ReportHistoryScreen extends StatelessWidget {
             ));
           }
 
-          // Client-side filter by gymId (no composite index required)
-          final docs = (snap.data?.docs ?? [])
-              .where((d) =>
-                  (d.data() as Map<String, dynamic>)['gymId'] == gymId)
-              .toList();
+          final docs = snap.data?.docs ?? [];
 
           if (docs.isEmpty) return const _Empty();
 

@@ -16,6 +16,7 @@ import '../../shared/qr_scan.dart';
 import '../../auth/login.dart';
 import '../../shared/gym_status_service.dart';
 import '../../shared/utils.dart';
+import '../../features/chat/conversations_list.dart';
 
 class GymUser extends StatefulWidget {
   const GymUser({super.key});
@@ -450,6 +451,20 @@ class _GymUserState extends State<GymUser> {
     ),
     actions: showActions
         ? [
+            IconButton(
+              icon: const Icon(Icons.mail_outline_rounded,
+                  color: Colors.white70),
+              tooltip: 'Messages',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ConversationsListScreen(
+                    gymId: _gymId,
+                    userRole: 'member',
+                  ),
+                ),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.notifications_none_rounded,
                   color: Colors.white54),

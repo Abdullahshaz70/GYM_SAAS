@@ -8,6 +8,7 @@ import 'staff_mark_fees.dart';
 import '../../shared/skeleton_loaders.dart';
 import '../../shared/gym_status_service.dart';
 import '../../shared/utils.dart';
+import '../../features/chat/conversations_list.dart';
 
 class GymStaff extends StatefulWidget {
   const GymStaff({super.key});
@@ -388,6 +389,19 @@ Future<void> _loadData() async {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.mail_outline_rounded, color: Colors.white70),
+            tooltip: 'Messages',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ConversationsListScreen(
+                  gymId: gymId,
+                  userRole: 'staff',
+                ),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
             onPressed: _logout,

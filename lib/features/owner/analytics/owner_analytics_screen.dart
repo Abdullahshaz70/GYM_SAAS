@@ -2192,9 +2192,10 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen>
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     await FirebaseFirestore.instance
+        .collection('gyms')
+        .doc(widget.gymId)
         .collection('pos_reports_history')
         .add({
-      'gymId':       widget.gymId,
       'gymName':     widget.gymName,
       'adminId':     uid,
       'fileName':    fileName,

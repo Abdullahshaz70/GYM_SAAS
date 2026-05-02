@@ -18,6 +18,7 @@ import '../../shared/utils.dart';
 
 import 'analytics/owner_analytics_screen.dart';
 import 'expenses/expense_tracker_screen.dart';
+import '../../features/chat/conversations_list.dart';
 
 class GymOwnerScreen extends StatefulWidget {
   const GymOwnerScreen({super.key});
@@ -566,6 +567,21 @@ class _GymOwnerScreenState extends State<GymOwnerScreen> {
         ),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.mail_outline_rounded,
+              color: Colors.white70),
+          tooltip: 'Messages',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ConversationsListScreen(
+                gymId: _gymId!,
+                userRole: 'owner',
+              ),
+            ),
+          ),
+        ),
+
         IconButton(
           icon: const Icon(Icons.notifications_none_rounded,
               color: Colors.white70),
